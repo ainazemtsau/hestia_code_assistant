@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK backlog entry",
+  "type": "object",
+  "required": [
+    "id",
+    "created_utc",
+    "title",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "created_utc": {
+      "type": "string"
+    },
+    "module": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "type": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "deferred",
+        "queued",
+        "active",
+        "done",
+        "wontfix"
+      ]
+    },
+    "links": {
+      "type": "object"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ]
+    }
+  }
+}

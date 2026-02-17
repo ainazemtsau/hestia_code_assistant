@@ -1,0 +1,11 @@
+{
+  "schema_version": 2,
+  "project": {
+    "name": "REPLACE_ME",
+    "created_utc": "REPLACE_ME"
+  },
+  "modules": [],
+  "public_api_index": ".csk-app/public_apis",
+  "backlog": ".csk-app/backlog.jsonl",
+  "notes": "Source of truth for module boundaries."
+}

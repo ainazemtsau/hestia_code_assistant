@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK verify proof",
+  "type": "object",
+  "required": [
+    "task_id",
+    "module",
+    "ran_utc",
+    "overall_ok",
+    "results"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "module": {
+      "type": "string"
+    },
+    "ran_utc": {
+      "type": "string"
+    },
+    "overall_ok": {
+      "type": "boolean"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

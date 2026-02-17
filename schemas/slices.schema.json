@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK slices",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "module",
+    "slices"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        2
+      ]
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "module": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "slices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "scope",
+          "required_gates"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "object",
+            "required": [
+              "allowed_paths",
+              "forbidden_paths"
+            ],
+            "properties": {
+              "allowed_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "forbidden_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required_gates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "risk": {
+            "type": "string"
+          },
+          "trace": {
+            "type": "object",
+            "properties": {
+              "research": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "decisions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "incidents": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

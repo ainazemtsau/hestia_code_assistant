@@ -1,0 +1,5 @@
+.csk-app/run/
+.csk-app/retro/
+**/.csk/**/run/
+**/.csk/**/proofs/
+.codex-log/

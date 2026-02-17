@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK registry",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "modules",
+    "public_api_index"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        2
+      ]
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "name",
+        "created_utc"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "created_utc": {
+          "type": "string"
+        }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "path",
+          "public_api",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "public_api": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "created_utc": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "public_api_index": {
+      "type": "string"
+    },
+    "backlog": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
