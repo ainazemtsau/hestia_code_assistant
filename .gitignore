@@ -3,3 +3,6 @@
 **/.csk/**/run/
 **/.csk/**/proofs/
 .codex-log/
+# CSK sync runtime artifacts
+.csk-app/backups/
+.csk-app/reports/
