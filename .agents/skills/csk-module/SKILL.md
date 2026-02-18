@@ -1,6 +1,6 @@
 ---
 name: csk-module
-description: Run CSK‑M Pro v4 module lifecycle: plan critic + freeze + approval, slice execution with scope-check, verify proofs, review proofs, READY validation, approvals, and retro.
+description: "Run CSK‑M Pro v4 module lifecycle: plan critic + freeze + approval, slice execution with scope-check, verify proofs, review proofs, READY validation, approvals, and retro."
 ---
 
 # `$csk-module` — Module kernel (CSK‑M Pro v4)

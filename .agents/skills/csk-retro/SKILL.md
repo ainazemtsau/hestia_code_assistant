@@ -1,6 +1,6 @@
 ---
 name: csk-retro
-description: Run CSK‑M Pro v4 retrospectives: cluster incidents and produce concrete patch lists for env/toolchain/tests/rules. Use after READY or repeated failures.
+description: "Run CSK‑M Pro v4 retrospectives: cluster incidents and produce concrete patch lists for env/toolchain/tests/rules. Use after READY or repeated failures."
 ---
 
 # `$csk-retro` — Retro + Learning Loop (CSK‑M Pro v4)
