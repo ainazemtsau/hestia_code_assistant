@@ -7,47 +7,58 @@
   "sync_paths": [
     {
       "path": ".agents/skills/csk",
-      "required": true
+      "required": true,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": ".agents/skills/control-tower",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": ".agents/skills/csk-critic",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": ".agents/skills/csk-doctor",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": ".agents/skills/csk-reviewer",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": ".csk-app/registry.json",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": "tools/csk",
-      "required": true
+      "required": true,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": "schemas",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": "templates",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": "AGENTS.md",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     },
     {
       "path": "README_CSKM_PRO.md",
-      "required": false
+      "required": false,
+      "merge_mode": "overlay_allowed"
     }
   ]
 }

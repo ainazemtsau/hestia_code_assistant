@@ -4,24 +4,66 @@ Repository: `https://github.com/ainazemtsau/hestia_code_assistant`
 
 ## Goal
 
-Sync local CSK workflow assets to upstream state with deterministic rules and verification.
+Update CSK assets without losing project-specific customizations.
 
-## Default command flow
+The updater now uses:
+- Core layer: upstream files from manifest paths.
+- Overlay layer: `.csk-app/overlay/<manifest-path>` project-specific overrides.
+- Decision gate: AI backup recommendation + human approval.
 
-1. Dry-run:
+## Modes
+
+1. `dry-run` (default)
    - `python tools/csk/sync_upstream.py`
-2. Apply:
-   - `python tools/csk/sync_upstream.py --apply`
-3. Check report:
-   - `/.csk-app/reports/csk-sync-*.json` must contain `"success": true`
+   - Backward-compatible preview, no writes.
+
+2. `plan`
+   - `python tools/csk/sync_upstream.py plan`
+   - Builds backup candidate table and writes decision template:
+     - `.csk-app/sync/decisions/decision-*.json`
+
+3. `apply` / `migrate`
+   - `python tools/csk/sync_upstream.py apply --decision-file <path> --approve-decision`
+   - Requires approved decision and confidence threshold.
+   - Applies core replacement, then reapplies overlay.
+   - Writes:
+     - state: `.csk-app/sync/state.json`
+     - history: `.csk-app/sync/history.jsonl`
+     - reports: `.csk-app/reports/csk-sync-*.json`
+
+## Decision contract
+
+Decision JSON fields:
+- `selected_backup`
+- `confidence`
+- `rationale`
+- `candidate_table`
+- `approved_by_human`
+- `approved_at`
+
+If confidence is low or backup is not selected:
+- updater stops
+- checklist is generated under `.csk-app/reports/`
+
+## Dirty worktree policy
+
+- `plan` only warns on dirty synced paths.
+- `apply`/`migrate` blocks by default when synced paths are dirty.
+- Use `--allow-dirty` only when overwrite risk is accepted.
+
+## Manifest merge modes
+
+Defined per path in `tools/csk/upstream_sync_manifest.json`:
+- `overlay_allowed` (default): core replaced, overlay reapplied.
+- `replace_core`: no overlay divergence allowed.
+- `manual_only`: auto merge disabled, checklist required.
 
 ## Pin to tag/branch
 
-- `python tools/csk/sync_upstream.py --source-ref <tag-or-branch>`
+- `python tools/csk/sync_upstream.py plan --source-ref <tag-or-branch>`
+- `python tools/csk/sync_upstream.py apply --source-ref <tag-or-branch> --decision-file <path> --approve-decision`
 
-## What is synced
+## Runtime exclusions
 
-Defined in:
-- `tools/csk/upstream_sync_manifest.json`
-
-Runtime proof directories are not part of sync policy.
+Runtime proof directories are still excluded from sync policy:
+- `modules/*/.csk/**/run`
