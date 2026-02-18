@@ -14,7 +14,7 @@
 - toolchain.json: gate commands (durable)
 - public_apis/: synced contracts of other modules (durable)
 - tasks/T-####/
-  - plan.md, plan.summary.md (durable), slices.json, plan.freeze.json (durable)
+  - plan.md, plan.summary.md (durable), user_acceptance.md (durable), slices.json, plan.freeze.json (durable)
   - approvals/ (durable)
   - run/ (ignored): proofs, active slice, attempt counters
 - logs/*.jsonl: decisions/incidents (durable)

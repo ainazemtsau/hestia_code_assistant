@@ -15,6 +15,8 @@ Hard rules (enforced by artifacts)
   - run `python tools/csk/csk.py verify ...` and keep proof JSON
 - Review must be recorded as machine-readable proof:
   - `python tools/csk/csk.py record-review ...`
+- User acceptance must be recorded as durable proof:
+  - `python tools/csk/csk.py record-user-check ...`
 - READY must be validated:
   - `python tools/csk/csk.py validate-ready ...`
 
@@ -30,17 +32,22 @@ App context behavior (repo root)
   1) Identify affected modules (from registry + code inspection). Do not ask user to list modules.
   2) For each affected module:
      - create task: `python tools/csk/csk.py new-task <module> "<title>"`
-     - draft `plan.md`, `plan.summary.md`, and `slices.json`
+     - draft `plan.md`, `plan.summary.md`, `user_acceptance.md`, and `slices.json`
      - run Critic ($csk-critic)
      - freeze: `freeze-plan`
      - ask user for Plan Approval and then record: `approve-plan`
+     - send user the generated manual checks from `user_acceptance.md`
+     - record user proof: `record-user-check --result pass ...` (user executes checks and confirms)
      - report in chat only:
        - task goal and 3–5 short steps
        - AC list
        - link to `plan.summary.md`
        - link to full `plan.md`
+       - link to `user_acceptance.md`
      - if plan summary markers are missing in existing tasks, use migration command:
        `python tools/csk/csk.py regen-plan-summary <module> <task>`
+     - if user acceptance markers are missing, use:
+       `python tools/csk/csk.py regen-user-acceptance <module> <task>`
   3) Sync public APIs: `api-sync`
  4) Output a consolidated plan report:
      - what runs in parallel vs sequential
@@ -55,6 +62,7 @@ Recommended chat format after creating task:
 - AC: AC1, AC2, AC3
 - shareable: <path>/plan.summary.md
 - full: <path>/plan.md
+- user-check: <path>/user_acceptance.md
 ```
 
 Module context behavior

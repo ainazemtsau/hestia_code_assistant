@@ -12,6 +12,7 @@ Gates (hard)
 - Scope-check required (changes must be inside allowed paths).
 - Verify gates must pass.
 - Strict review must be recorded (review proof).
+- Manual user acceptance must be recorded (`record-user-check`) before READY.
 - If toolchain marks E2E required, E2E must pass.
 
 Incident logging (mandatory)

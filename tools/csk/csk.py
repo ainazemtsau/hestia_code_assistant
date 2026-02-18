@@ -154,11 +154,25 @@ def sha256_file(path: Path) -> str:
 
 PLAN_SUMMARY_START = "<!-- PLAN_SUMMARY_START -->"
 PLAN_SUMMARY_END = "<!-- PLAN_SUMMARY_END -->"
+USER_ACCEPTANCE_START = "<!-- USER_ACCEPTANCE_START -->"
+USER_ACCEPTANCE_END = "<!-- USER_ACCEPTANCE_END -->"
 
 
 def extract_plan_summary_block(plan_text: str) -> Optional[str]:
     m = re.search(
         rf"{re.escape(PLAN_SUMMARY_START)}\s*(.*?)\s*{re.escape(PLAN_SUMMARY_END)}",
+        plan_text,
+        flags=re.S,
+    )
+    if not m:
+        return None
+    block = m.group(1).strip()
+    return block or None
+
+
+def extract_user_acceptance_block(plan_text: str) -> Optional[str]:
+    m = re.search(
+        rf"{re.escape(USER_ACCEPTANCE_START)}\s*(.*?)\s*{re.escape(USER_ACCEPTANCE_END)}",
         plan_text,
         flags=re.S,
     )
@@ -192,6 +206,30 @@ def build_plan_summary_file(
     return summary_tpl.replace("<module>", module_id).replace("<T-id>", task_id).replace("<title>", title).replace("<summary_block>", block)
 
 
+def build_user_acceptance_file(
+    repo: Path,
+    plan_path: Path,
+    module_id: str,
+    task_id: str,
+    title: str,
+    *,
+    require_block: bool = True,
+) -> str:
+    acceptance_tpl = (repo / "templates" / "task" / "user_acceptance.md").read_text(encoding="utf-8")
+    plan_text = plan_path.read_text(encoding="utf-8")
+    block = extract_user_acceptance_block(plan_text)
+    if not block:
+        if not require_block:
+            block = (
+                "## Needs cleanup\n"
+                "- `USER_ACCEPTANCE_START/USER_ACCEPTANCE_END` block was not found in plan.md.\n"
+                "- Fill this block with concrete manual checks and rerun `regen-user-acceptance` before user CHECK."
+            )
+        else:
+            raise SystemExit("plan.md missing USER_ACCEPTANCE_START/END markers. Add manual acceptance instructions before freeze.")
+    return acceptance_tpl.replace("<module>", module_id).replace("<T-id>", task_id).replace("<title>", title).replace("<acceptance_block>", block)
+
+
 def sync_plan_summary(repo: Path, plan_path: Path, summary_path: Path, module_id: str, task_id: str, title: str,
                       *, require_block: bool = True) -> None:
     content = build_plan_summary_file(
@@ -203,6 +241,19 @@ def sync_plan_summary(repo: Path, plan_path: Path, summary_path: Path, module_id
         require_block=require_block,
     )
     atomic_write_text(summary_path, content)
+
+
+def sync_user_acceptance(repo: Path, plan_path: Path, acceptance_path: Path, module_id: str, task_id: str, title: str,
+                         *, require_block: bool = True) -> None:
+    content = build_user_acceptance_file(
+        repo,
+        plan_path,
+        module_id,
+        task_id,
+        title,
+        require_block=require_block,
+    )
+    atomic_write_text(acceptance_path, content)
 
 
 def validate_plan_summary_hash(tdir: Path, freeze: Dict[str, Any], require_summary_hash: bool = False) -> List[str]:
@@ -659,6 +710,14 @@ def task_paths(repo: Path, module_id: str, task_id: str) -> Tuple[Path, Path]:
     proofs_dir.mkdir(parents=True, exist_ok=True)
     return tdir, module_root
 
+def task_title(tdir: Path, task_id: str) -> str:
+    st = load_json(tdir / "run" / "status.json", default={})
+    title = st.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    return task_id
+
+
 def cmd_new_task(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     ensure_app_skeleton(repo)
@@ -686,6 +745,15 @@ def cmd_new_task(args: argparse.Namespace) -> None:
         args.title,
         require_block=True,
     )
+    sync_user_acceptance(
+        repo,
+        tdir / "plan.md",
+        tdir / "user_acceptance.md",
+        m["id"],
+        tid,
+        args.title,
+        require_block=False,
+    )
     slices_tpl = load_json(repo / "templates" / "task" / "slices.json")
     slices_tpl["task_id"] = tid
     slices_tpl["module"] = m["id"]
@@ -707,6 +775,7 @@ def cmd_new_task(args: argparse.Namespace) -> None:
     print(f"[csk] new task: {m['id']}/{tid}")
     print(f"[csk] plan.md: {tdir / 'plan.md'}")
     print(f"[csk] plan.summary.md: {tdir / 'plan.summary.md'}")
+    print(f"[csk] user_acceptance.md: {tdir / 'user_acceptance.md'}")
 
 def cmd_freeze_plan(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
@@ -716,13 +785,7 @@ def cmd_freeze_plan(args: argparse.Namespace) -> None:
     if not plan_path.exists() or not slices_path.exists():
         raise SystemExit("Missing plan.md or slices.json")
 
-    # derive title from command/context for deterministic summary regeneration
-    title = args.task_id
-    try:
-        st = load_json(tdir / "run" / "status.json", default={})
-        title = st.get("title", title)
-    except Exception:
-        pass
+    title = task_title(tdir, args.task_id)
 
     summary_path = tdir / "plan.summary.md"
     sync_plan_summary(
@@ -736,6 +799,19 @@ def cmd_freeze_plan(args: argparse.Namespace) -> None:
     )
     if not summary_path.exists():
         raise SystemExit("Failed to write plan.summary.md while freezing.")
+
+    acceptance_path = tdir / "user_acceptance.md"
+    sync_user_acceptance(
+        repo,
+        plan_path,
+        acceptance_path,
+        args.module_id,
+        args.task_id,
+        title,
+        require_block=True,
+    )
+    if not acceptance_path.exists():
+        raise SystemExit("Failed to write user_acceptance.md while freezing.")
 
     # Validate slices.json before freezing (prevents freezing broken contracts)
     slices_obj = load_json(slices_path)
@@ -807,7 +883,10 @@ def cmd_approve_plan(args: argparse.Namespace) -> None:
 
 def cmd_approve_ready(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
-    tdir, _ = task_paths(repo, args.module_id, args.task_id)
+    tdir, module_root = task_paths(repo, args.module_id, args.task_id)
+    ready_check = _collect_ready_requirements(tdir, module_root, args.module_id, args.task_id)
+    if not ready_check:
+        raise SystemExit("READY preconditions failed.")
     approval = {
         "task_id": args.task_id,
         "module": slugify(args.module_id),
@@ -845,6 +924,66 @@ def cmd_regen_plan_summary(args: argparse.Namespace) -> None:
     )
     print(f"[csk] regenerated plan summary: {summary_path}")
 
+
+def _normalize_checks(raw: Optional[List[str]]) -> List[str]:
+    if not raw:
+        return []
+    out: List[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        parts = [p.strip() for p in item.split(",") if p.strip()]
+        if parts:
+            out.extend(parts)
+        elif item.strip():
+            out.append(item.strip())
+    return out
+
+
+def cmd_regen_user_acceptance(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    tdir, _ = task_paths(repo, args.module_id, args.task_id)
+    plan_path = tdir / "plan.md"
+    if not plan_path.exists():
+        raise SystemExit("Missing plan.md")
+    acceptance_path = tdir / "user_acceptance.md"
+    title = task_title(tdir, args.task_id)
+    sync_user_acceptance(
+        repo,
+        plan_path,
+        acceptance_path,
+        args.module_id,
+        args.task_id,
+        title,
+        require_block=args.require_block,
+    )
+    print(f"[csk] regenerated user acceptance checklist: {acceptance_path}")
+
+
+def cmd_record_user_check(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    tdir, _ = task_paths(repo, args.module_id, args.task_id)
+    ua_path = tdir / "user_acceptance.md"
+    if not ua_path.exists():
+        raise SystemExit("Missing user_acceptance.md. Run freeze-plan or regen-user-acceptance first.")
+    checks = _normalize_checks(args.checks)
+    approval = {
+        "task_id": args.task_id,
+        "module": slugify(args.module_id),
+        "checked_utc": utc_now_iso(),
+        "checked_by": args.tested_by or "user",
+        "result": args.result,
+        "notes": args.notes.strip(),
+        "checks": checks,
+        "evidence": args.evidence.strip(),
+        "user_acceptance_sha256": sha256_file(ua_path),
+    }
+    if not approval["notes"]:
+        raise SystemExit("record-user-check requires --notes.")
+    atomic_write_json(tdir / "approvals" / "user-check.json", approval)
+    print(f"[csk] user-check recorded: {tdir / 'approvals' / 'user-check.json'}")
+
+
 def validate_freeze(tdir: Path, require_summary_hash: bool = False) -> Tuple[bool, List[str]]:
     violations: List[str] = []
     freeze = load_json(tdir / "plan.freeze.json", default=None)
@@ -859,6 +998,105 @@ def validate_freeze(tdir: Path, require_summary_hash: bool = False) -> Tuple[boo
         violations.append("slices.json hash mismatch vs freeze (plan drift)")
     violations.extend(validate_plan_summary_hash(tdir, freeze, require_summary_hash=require_summary_hash))
     return len(violations) == 0, violations
+
+
+def _validate_user_check(obj: Any, task_id: str, module_id: str, *, require_checks: bool = True) -> List[str]:
+    errors: List[str] = []
+    if not isinstance(obj, dict):
+        return [f"user-check proof is not an object for {task_id}"]
+    if obj.get("task_id") != task_id:
+        errors.append(f"user-check task_id mismatch: {obj.get('task_id')} != {task_id}")
+    if obj.get("module") != slugify(module_id):
+        errors.append(f"user-check module mismatch: {obj.get('module')} != {slugify(module_id)}")
+    if not _is_str(obj.get("checked_utc")):
+        errors.append("user-check missing checked_utc")
+    if not _is_str(obj.get("checked_by")):
+        errors.append("user-check missing checked_by")
+    if obj.get("result") not in ("pass", "fail"):
+        errors.append("user-check result must be pass|fail")
+    if not _is_str(obj.get("notes")) or not obj.get("notes").strip():
+        if require_checks:
+            errors.append("user-check missing required notes")
+    sha = obj.get("user_acceptance_sha256")
+    if not _is_str(sha):
+        errors.append("user-check missing user_acceptance_sha256")
+    checks = obj.get("checks")
+    if checks is not None and not _is_list_of_str(checks):
+        errors.append("user-check checks must be list[str]")
+    evidence = obj.get("evidence")
+    if evidence is not None and not _is_str(evidence):
+        errors.append("user-check evidence must be string")
+    return errors
+
+
+def _require_user_check_for_ready(tdir: Path, task_id: str, module_id: str, *, enforce_sha: bool = True) -> None:
+    ua_path = tdir / "approvals" / "user-check.json"
+    if not ua_path.exists():
+        raise SystemExit("Missing user acceptance proof (approvals/user-check.json). Run record-user-check first.")
+    uc = load_json(ua_path)
+    errs = _validate_user_check(uc, task_id, module_id, require_checks=True)
+    if errs:
+        raise SystemExit("Invalid user-check proof: " + "; ".join(errs))
+    if uc.get("result") != "pass":
+        raise SystemExit(f"user-check failed with result={uc.get('result')}. Re-run with --result pass after remediation.")
+    if enforce_sha:
+        acceptance_path = tdir / "user_acceptance.md"
+        if not acceptance_path.exists():
+            raise SystemExit("Missing user_acceptance.md for SHA validation. Run freeze-plan or regen-user-acceptance.")
+        if uc.get("user_acceptance_sha256") != sha256_file(acceptance_path):
+            raise SystemExit("user-check SHA mismatch. Re-run record-user-check for the current user_acceptance.md.")
+
+
+def _collect_ready_requirements(tdir: Path, module_root: Path, module_id: str, task_id: str) -> Dict[str, Any]:
+    ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
+    if not ok_freeze:
+        raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
+
+    if not (tdir / "approvals" / "plan.json").exists():
+        raise SystemExit("Missing plan approval (approvals/plan.json).")
+
+    proofs_dir = tdir / "run" / "proofs"
+    scope_p = latest_proof(proofs_dir, "scope")
+    verify_p = latest_proof(proofs_dir, "verify")
+    review_p = latest_proof(proofs_dir, "review")
+    if not scope_p:
+        raise SystemExit("Missing scope proof. Run scope-check first.")
+    if not verify_p:
+        raise SystemExit("Missing verify proof. Run verify first.")
+    if not review_p:
+        raise SystemExit("Missing review proof. Record review first.")
+
+    scope = load_json(scope_p)
+    verify = load_json(verify_p)
+    review = load_json(review_p)
+    if not scope.get("overall_ok", False):
+        raise SystemExit("Scope proof failed. Fix scope violations.")
+    if not verify.get("overall_ok", False):
+        raise SystemExit("Verify proof failed. Fix failing required gates.")
+    if not review.get("ready", False):
+        raise SystemExit(f"Review not ready (p0={review.get('p0')}, p1={review.get('p1')}).")
+
+    toolchain = load_json(module_root / ".csk" / "toolchain.json")
+    if not toolchain:
+        raise SystemExit("Missing .csk/toolchain.json")
+    e2e_req = toolchain.get("gates", {}).get("e2e", {}).get("required", False)
+    if e2e_req:
+        e2e_p = latest_proof(proofs_dir, "e2e")
+        if not e2e_p:
+            raise SystemExit("E2E required but no e2e proof found.")
+        e2e = load_json(e2e_p)
+        if not e2e.get("overall_ok", False):
+            raise SystemExit("E2E proof failed.")
+
+    _require_user_check_for_ready(tdir, task_id, module_id, enforce_sha=True)
+
+    return {
+        "scope_proof": str(scope_p.name),
+        "verify_proof": str(verify_p.name),
+        "review_proof": str(review_p.name),
+        "e2e_required": bool(e2e_req),
+        "user_check_proof": "user-check.json",
+    }
 
 def git_changed_files(repo: Path) -> List[str]:
     """
@@ -1092,46 +1330,7 @@ def cmd_record_review(args: argparse.Namespace) -> None:
 def cmd_validate_ready(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     tdir, module_root = task_paths(repo, args.module_id, args.task_id)
-
-    ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
-    if not ok_freeze:
-        raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
-
-    if not (tdir / "approvals" / "plan.json").exists():
-        raise SystemExit("Missing plan approval (approvals/plan.json).")
-
-    proofs_dir = tdir / "run" / "proofs"
-    scope_p = latest_proof(proofs_dir, "scope")
-    verify_p = latest_proof(proofs_dir, "verify")
-    review_p = latest_proof(proofs_dir, "review")
-
-    if not scope_p:
-        raise SystemExit("Missing scope proof. Run scope-check first.")
-    if not verify_p:
-        raise SystemExit("Missing verify proof. Run verify first.")
-    if not review_p:
-        raise SystemExit("Missing review proof. Record review first.")
-
-    scope = load_json(scope_p)
-    verify = load_json(verify_p)
-    review = load_json(review_p)
-
-    if not scope.get("overall_ok", False):
-        raise SystemExit("Scope proof failed. Fix scope violations.")
-    if not verify.get("overall_ok", False):
-        raise SystemExit("Verify proof failed. Fix failing required gates.")
-    if not review.get("ready", False):
-        raise SystemExit(f"Review not ready (p0={review.get('p0')}, p1={review.get('p1')}).")
-
-    toolchain = load_json(module_root / ".csk" / "toolchain.json")
-    e2e_req = toolchain.get("gates", {}).get("e2e", {}).get("required", False)
-    if e2e_req:
-        e2e_p = latest_proof(proofs_dir, "e2e")
-        if not e2e_p:
-            raise SystemExit("E2E required but no e2e proof found.")
-        e2e = load_json(e2e_p)
-        if not e2e.get("overall_ok", False):
-            raise SystemExit("E2E proof failed.")
+    req = _collect_ready_requirements(tdir, module_root, args.module_id, args.task_id)
 
     # write a ready report in run/
     out = tdir / "run" / "ready.json"
@@ -1139,10 +1338,11 @@ def cmd_validate_ready(args: argparse.Namespace) -> None:
         "task_id": args.task_id,
         "module": slugify(args.module_id),
         "validated_utc": utc_now_iso(),
-        "scope_proof": str(scope_p.name),
-        "verify_proof": str(verify_p.name),
-        "review_proof": str(review_p.name),
-        "e2e_required": bool(e2e_req)
+        "scope_proof": req["scope_proof"],
+        "verify_proof": req["verify_proof"],
+        "review_proof": req["review_proof"],
+        "e2e_required": bool(req["e2e_required"]),
+        "user_check_proof": req["user_check_proof"],
     })
     print(f"[csk] READY VALIDATED ok. ready_report={out}")
 
@@ -1847,6 +2047,37 @@ def cmd_validate(args: argparse.Namespace) -> None:
                     else:
                         warnings.append(msg)
 
+            # user acceptance artifact (required for manual checks)
+            user_acceptance_path = tdir / "user_acceptance.md"
+            if not user_acceptance_path.exists():
+                if args.strict:
+                    errors.append(f"{mid}/{tdir.name}: missing user_acceptance.md (required by current workflow)")
+                else:
+                    warnings.append(f"{mid}/{tdir.name}: missing user_acceptance.md (required in current workflow)")
+
+            # user-check proof
+            user_check_path = tdir / "approvals" / "user-check.json"
+            if user_check_path.exists():
+                user_check = load_json(user_check_path)
+                schema = _load_schema(repo, "user_check.schema.json")
+                if schema:
+                    errors += _validate_with_jsonschema(user_check, schema)
+                e, w = _validate_user_check(user_check, tdir.name, mid, require_checks=False)
+                errors += e
+                warnings += w
+                if user_acceptance_path.exists() and user_check.get("user_acceptance_sha256"):
+                    try:
+                        if user_check.get("user_acceptance_sha256") != sha256_file(user_acceptance_path):
+                            warnings.append(f"{mid}/{tdir.name}: user-check proof hash mismatch (user_acceptance.md changed after recording)")
+                    except Exception:
+                        warnings.append(f"{mid}/{tdir.name}: failed to validate user-check hash drift")
+            elif freeze_path.exists():
+                msg = f"{mid}/{tdir.name}: task frozen but user-check proof missing (approvals/user-check.json)"
+                if args.strict:
+                    errors.append(msg)
+                else:
+                    warnings.append(msg)
+
             # approvals sanity
             appr_plan = tdir/"approvals"/"plan.json"
             if freeze_path.exists() and not appr_plan.exists():
@@ -1938,6 +2169,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.set_defaults(fn=cmd_regen_plan_summary, module_mode="module_task")
 
+    sp = sub.add_parser("regen-user-acceptance")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
+    sp.add_argument("--require-block", action="store_true")
+    sp.set_defaults(fn=cmd_regen_user_acceptance, module_mode="module_task")
+
     sp = sub.add_parser("scope-check")
     sp.add_argument("module_or_task_id")
     sp.add_argument("task_id", nargs="?")
@@ -1967,6 +2205,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp.add_argument("--summary", required=True)
     sp.add_argument("--fail-on-blockers", action="store_true")
     sp.set_defaults(fn=cmd_record_review, module_mode="module_task")
+
+    sp = sub.add_parser("record-user-check")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
+    sp.add_argument("--result", required=True, choices=["pass", "fail"])
+    sp.add_argument("--notes", required=True)
+    sp.add_argument("--checks", nargs="+")
+    sp.add_argument("--evidence", default="")
+    sp.add_argument("--tested-by", default="user")
+    sp.set_defaults(fn=cmd_record_user_check, module_mode="module_task")
 
     sp = sub.add_parser("validate-ready")
     sp.add_argument("module_or_task_id")

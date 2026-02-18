@@ -27,14 +27,18 @@ Per module:
 - AGENTS.md
 - PUBLIC_API.md
 - .csk/toolchain.json
-- .csk/tasks/<task>/{plan.md,plan.summary.md,slices.json,plan.freeze.json,approvals/*}
+- .csk/tasks/<task>/{plan.md,plan.summary.md,user_acceptance.md,slices.json,plan.freeze.json,approvals/*}
 
 ## Plan Gate (deep planning)
 For each task:
-1) Create plan.md + plan.summary.md + slices.json (plan summary is generated automatically from the shareable block in plan.md).
+1) Create plan.md + plan.summary.md + user_acceptance.md + slices.json
+   - `plan.summary.md` and `user_acceptance.md` are generated automatically from shareable blocks in `plan.md`.
 2) Run Critic ($csk-critic) until no P0/P1
-3) Freeze (`python tools/csk/csk.py freeze-plan <module> <task>` legacy)
-4) Plan approval (`python tools/csk/csk.py approve-plan <module> <task>` legacy)
+3) Populate `USER_ACCEPTANCE_START/END` block with concrete manual checks for user validation
+4) Freeze (`python tools/csk/csk.py freeze-plan <module> <task>` legacy)
+5) Plan approval (`python tools/csk/csk.py approve-plan <module> <task>` legacy)
+6) Manual user-check: пользователь выполняет сценарии из `user_acceptance.md` и пишет `record-user-check`
+   - `python tools/csk/csk.py record-user-check <module> <task> --result pass --notes \"...\"`
 
 Freeze writes `plan.freeze.json` with SHA256 of:
 - `plan.md` (`plan_sha256`)
@@ -49,6 +53,7 @@ Shareable plan output:
 Migration for existing tasks:
 - If `plan.md` was created before this change, use `python tools/csk/csk.py regen-plan-summary <module> <task>`.
 - If `plan.md` lacks `PLAN_SUMMARY_START/END`, command creates `plan.summary.md` with a `Needs cleanup` placeholder that must be replaced.
+- If `plan.md` lacks `USER_ACCEPTANCE_START/END`, `regen-user-acceptance` creates `user_acceptance.md` with a `Needs cleanup` placeholder.
 
 ## Scope enforcement
 Each slice declares allowed_paths (module-relative globs).
@@ -94,6 +99,7 @@ This checks:
 - plan approval exists
 - latest scope proof passes
 - latest verify proof passes
+- user-check proof exists and result is pass
 - review proof exists and has p0=p1=0
 - if toolchain requires e2e: latest e2e proof passes
 

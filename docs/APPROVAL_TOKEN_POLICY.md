@@ -5,7 +5,11 @@
    - checkpoint after Critic clears P0/P1 and plan is frozen
    - recorded by `approve-plan`
 
-2) Ready approval (per module task)
+2) User validation checkpoint (per module task)
+   - checkpoint after user executes `user_acceptance.md`
+   - recorded by `record-user-check`
+
+3) Ready approval (per module task)
    - checkpoint after validate-ready passes
    - recorded by `approve-ready`
    - you then do git operations (commit/push/merge) manually

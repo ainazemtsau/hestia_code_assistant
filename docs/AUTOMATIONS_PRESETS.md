@@ -8,6 +8,7 @@ Prompt:
 - `$csk`
 - Run status summary.
 - For each module with active tasks, run `validate-ready` (it will fail if not ready; log incidents).
+- Ensure manual acceptance is executed before READY; `validate-ready` now requires `approvals/user-check.json` with `result=pass`.
 - Run verify on main if applicable.
 - Do NOT modify product code. Only update incidents/retro.
 

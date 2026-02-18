@@ -15,5 +15,6 @@ If you want strict enforcement, add a manual checklist:
 - scope-check passed
 - verify passed
 - review recorded
+- user-check recorded with pass
 - validate-ready passed
 - only then create branch/commit

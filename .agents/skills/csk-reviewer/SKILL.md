@@ -18,6 +18,7 @@ Inputs
 - latest verify proof JSON
 - diff / changed files
 - (optional) e2e proof
+- user acceptance checklist (`user_acceptance.md`) for functional review context
 
 Output format
 1) READY / NOT READY
@@ -31,3 +32,4 @@ After review
 - The executor MUST record the review summary using:
   - from module directory: `python tools/csk/csk.py record-review <task> --p0 N --p1 N --summary "..."`
   - legacy: `python tools/csk/csk.py record-review <module> <task> --p0 N --p1 N --summary "..."`
+- This review is not a substitute for user acceptance; human must still run checks and record `record-user-check`.

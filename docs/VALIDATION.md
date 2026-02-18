@@ -47,6 +47,8 @@ python tools/csk/csk.py validate --json
 - `tasks/*/slices.json` structure (allowed_paths/required_gates)
 - `plan.freeze.json` drift (hash mismatch)
 - `plan.summary.md` presence + `plan_summary_sha256` hash consistency
+- `user_acceptance.md` presence
+- `approvals/user-check.json` presence + schema + `result=pass` for readiness
 - incidents/decisions/backlog jsonl structural validity
 
 Note: validation is intentionally conservative; it does not modify files.

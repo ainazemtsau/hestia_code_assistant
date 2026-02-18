@@ -8,7 +8,7 @@ description: "Run CSK‑M Pro v4 module lifecycle: plan critic + freeze + approv
 Use inside a module directory. This is the enforceable lifecycle:
 
 1) Planning
-- Draft `tasks/<T>/plan.md`, `tasks/<T>/plan.summary.md`, and `tasks/<T>/slices.json`
+- Draft `tasks/<T>/plan.md`, `tasks/<T>/plan.summary.md`, `tasks/<T>/user_acceptance.md`, and `tasks/<T>/slices.json`
 - Run `$csk-critic` until no P0/P1
 - Freeze plan:
   - from module root: `python tools/csk/csk.py freeze-plan <T>`
@@ -16,6 +16,9 @@ Use inside a module directory. This is the enforceable lifecycle:
 - Ask user to approve plan, then record:
   - from module root: `python tools/csk/csk.py approve-plan <T>`
   - legacy: `python tools/csk/csk.py approve-plan <module> <T>`
+- Send user `tasks/<T>/user_acceptance.md` for functional checks and record result:
+  - from module root: `python tools/csk/csk.py record-user-check <T> --result pass --notes "..." --checks "..."`
+  - legacy: `python tools/csk/csk.py record-user-check <module> <T> --result pass ...`
 
 After creating or refreshing plan artifacts, chat output should stay concise:
 - what we will deliver
@@ -23,10 +26,12 @@ After creating or refreshing plan artifacts, chat output should stay concise:
 - AC
 - link to `plan.summary.md`
 - link to full `plan.md`
+- link to `user_acceptance.md`
 - avoid printing full technical plan body in chat
 
 For legacy `plan.md` without shareable markers, run:
 - `python tools/csk/csk.py regen-plan-summary <T>`
+- `python tools/csk/csk.py regen-user-acceptance <T>`
 
 Recommended chat format after creating task:
 ```
@@ -36,6 +41,7 @@ Recommended chat format after creating task:
 - AC: AC1, AC2, AC3
 - shareable: tasks/<T>/plan.summary.md
 - full: tasks/<T>/plan.md
+- manual-checks: tasks/<T>/user_acceptance.md
 ```
 
 2) Execution (slice-by-slice)
@@ -57,6 +63,8 @@ For each slice S-xxx:
   - from module root: `python tools/csk/csk.py validate-ready <T>`
   - legacy: `python tools/csk/csk.py validate-ready <module> <T>`
 - Present ready_report path and manual validation steps.
+- Required order before ready approval in this module flow:
+  - `record-review` -> `record-user-check --result pass` -> `validate-ready` -> `approve-ready`
 - Ask user for ready approval and record:
   - from module root: `python tools/csk/csk.py approve-ready <T>`
   - legacy: `python tools/csk/csk.py approve-ready <module> <T>`

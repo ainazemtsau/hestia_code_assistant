@@ -13,6 +13,8 @@ Contracts (files)
 - `<module>/.csk/tasks/<task>/slices.json` -> `schemas/slices.schema.json`
 - `<module>/.csk/tasks/<task>/plan.freeze.json` -> `schemas/plan_freeze.schema.json`
 - `<module>/.csk/tasks/<task>/plan.summary.md` -> human-readable short-plan artifact (shareable summary)
+- `<module>/.csk/tasks/<task>/user_acceptance.md` -> manual acceptance contract (machine-generated from plan USER_ACCEPTANCE block)
+- `<module>/.csk/tasks/<task>/approvals/user-check.json` -> `schemas/user_check.schema.json`
 - runtime proofs under `run/proofs/`:
   - verify -> `schemas/verify_proof.schema.json`
   - scope -> `schemas/scope_proof.schema.json`
