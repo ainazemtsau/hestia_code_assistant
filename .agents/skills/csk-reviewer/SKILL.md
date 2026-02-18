@@ -29,5 +29,5 @@ Output format
 
 After review
 - The executor MUST record the review summary using:
-  `python tools/csk/csk.py record-review <module> <task> --p0 N --p1 N --summary "..."`
-
+  - from module directory: `python tools/csk/csk.py record-review <task> --p0 N --p1 N --summary "..."`
+  - legacy: `python tools/csk/csk.py record-review <module> <task> --p0 N --p1 N --summary "..."`

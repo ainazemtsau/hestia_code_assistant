@@ -26,6 +26,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    import retro_evolution as _retro_evo
+except Exception:
+    _retro_evo = None
+
 REPO_ROOT_MARKERS = [".git", ".csk-app", ".agents", ".codex", "AGENTS.md"]
 
 def utc_now_iso() -> str:
@@ -59,6 +64,80 @@ def append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
+
+def _require_retro_engine() -> Any:
+    if _retro_evo is None:
+        raise SystemExit("retro_evolution module is unavailable.")
+    return _retro_evo
+
+
+def _retro_validate_strict(repo: Path) -> Tuple[bool, List[str], List[str]]:
+    cmd = [sys.executable, str((repo / "tools" / "csk" / "csk.py").resolve()), "validate", "--all", "--strict", "--json"]
+    p = subprocess.run(cmd, cwd=str(repo), capture_output=True, text=True)
+    raw = (p.stdout or "").strip() or (p.stderr or "").strip()
+    if not raw:
+        return False, ["validate produced no output"], []
+    try:
+        obj = json.loads(raw)
+    except Exception as e:
+        return False, [f"validate json parse failed: {e}"], []
+    if not isinstance(obj, dict):
+        return False, ["validate json output is not object"], []
+    ok = bool(obj.get("ok", False))
+    errors = obj.get("errors", []) if isinstance(obj.get("errors", []), list) else []
+    warnings = obj.get("warnings", []) if isinstance(obj.get("warnings", []), list) else []
+    return ok, [str(e) for e in errors], [str(w) for w in warnings]
+
+
+def _log_workflow_drift_incident(repo: Path, summary: str, evidence: str = "") -> None:
+    payload = {
+        "ts": utc_now_iso(),
+        "module": None,
+        "stage": "retro-apply",
+        "severity": "P1",
+        "type": "workflow-overlay-drift",
+        "summary": summary,
+        "evidence": {"raw": evidence} if evidence else {},
+        "proposed_fix": ["Run retro-rollback or regenerate workflow state via retro-plan/apply."],
+        "status": "open",
+    }
+    append_jsonl(repo / ".csk-app" / "logs" / "incidents.jsonl", payload)
+
+
+def _enforce_overlay_guard_for_command(repo: Path, cmd_name: str) -> None:
+    revo = _require_retro_engine()
+    # Retro lifecycle + read-only commands are exempt from pre-exec guard.
+    exempt = {
+        "status",
+        "validate",
+        "retro",
+        "retro-plan",
+        "retro-approve",
+        "retro-apply",
+        "retro-history",
+        "retro-rollback",
+        "retro-action-complete",
+    }
+    if cmd_name in exempt:
+        return
+
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    mids = [str(m.get("id")) for m in reg.get("modules", []) if isinstance(m, dict) and m.get("id")]
+    errors, _warnings, _infos = revo.validate_contracts(repo, mids)
+    drift_markers = {
+        "workflow overlay hash drift detected",
+        "workflow overlay assets hash drift detected",
+        "workflow overlay config hash drift detected",
+    }
+    matched = [err for err in errors if err in drift_markers]
+    if matched:
+        _log_workflow_drift_incident(
+            repo,
+            f"Blocked command `{cmd_name}` due to workflow overlay drift.",
+            evidence="; ".join(matched),
+        )
+        raise SystemExit("Workflow overlay drift detected. Resolve via retro lifecycle before mutating commands.")
+
 def slugify(s: str) -> str:
     s = s.strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
@@ -71,6 +150,275 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+PLAN_SUMMARY_START = "<!-- PLAN_SUMMARY_START -->"
+PLAN_SUMMARY_END = "<!-- PLAN_SUMMARY_END -->"
+
+
+def extract_plan_summary_block(plan_text: str) -> Optional[str]:
+    m = re.search(
+        rf"{re.escape(PLAN_SUMMARY_START)}\s*(.*?)\s*{re.escape(PLAN_SUMMARY_END)}",
+        plan_text,
+        flags=re.S,
+    )
+    if not m:
+        return None
+    block = m.group(1).strip()
+    return block or None
+
+
+def build_plan_summary_file(
+    repo: Path,
+    plan_path: Path,
+    module_id: str,
+    task_id: str,
+    title: str,
+    *,
+    require_block: bool = True,
+) -> str:
+    summary_tpl = (repo / "templates" / "task" / "plan.summary.md").read_text(encoding="utf-8")
+    plan_text = plan_path.read_text(encoding="utf-8")
+    block = extract_plan_summary_block(plan_text)
+    if not block:
+        if not require_block:
+            block = (
+                "## Needs cleanup\n"
+                "- `PLAN_SUMMARY_START/PLAN_SUMMARY_END` block was not found in plan.md.\n"
+                "- Add a short shareable block in `plan.md` and rerun `regen-plan-summary`.\n"
+            )
+        else:
+            raise SystemExit("plan.md missing PLAN_SUMMARY_START/END markers. Add the shareable block before freeze.")
+    return summary_tpl.replace("<module>", module_id).replace("<T-id>", task_id).replace("<title>", title).replace("<summary_block>", block)
+
+
+def sync_plan_summary(repo: Path, plan_path: Path, summary_path: Path, module_id: str, task_id: str, title: str,
+                      *, require_block: bool = True) -> None:
+    content = build_plan_summary_file(
+        repo,
+        plan_path,
+        module_id,
+        task_id,
+        title,
+        require_block=require_block,
+    )
+    atomic_write_text(summary_path, content)
+
+
+def validate_plan_summary_hash(tdir: Path, freeze: Dict[str, Any], require_summary_hash: bool = False) -> List[str]:
+    violations: List[str] = []
+    summary_path = tdir / "plan.summary.md"
+    plan_summary_sha = freeze.get("plan_summary_sha256")
+
+    if require_summary_hash:
+        if not summary_path.exists():
+            violations.append("missing plan.summary.md (required for strict plan summary checks)")
+            return violations
+        if not plan_summary_sha:
+            violations.append("plan.freeze.json missing plan_summary_sha256; re-run freeze-plan to regenerate it.")
+        elif sha256_file(summary_path) != plan_summary_sha:
+            violations.append("plan.summary.md hash mismatch vs freeze (summary drift)")
+    elif plan_summary_sha:
+        if not summary_path.exists():
+            violations.append("plan_summary_sha256 exists but plan.summary.md is missing")
+        elif sha256_file(summary_path) != plan_summary_sha:
+            violations.append("plan.summary.md hash mismatch vs freeze (summary drift)")
+    return violations
+
+def _path_is_subpath(path: Path, base: Path) -> bool:
+    try:
+        path.resolve().relative_to(base.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def resolve_module_path_matches(repo: Path, cwd: Path) -> List[Tuple[str, Path, Path]]:
+    """Return candidate module matches for cwd.
+
+    Returns tuples: (module_id, module_rel_path, module_abs_path).
+    Sorted by deepest registry path first.
+    """
+    reg_path = repo / ".csk-app" / "registry.json"
+    reg = load_json(reg_path, default={"modules": []})
+    modules = reg.get("modules", []) if isinstance(reg, dict) else []
+
+    cwd = cwd.resolve()
+    out: List[Tuple[str, Path, Path]] = []
+    for m in modules:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id")
+        rel = m.get("path")
+        if not isinstance(mid, str) or not isinstance(rel, str):
+            continue
+        abs_root = (repo / rel).resolve()
+        if _path_is_subpath(cwd, abs_root):
+            out.append((mid, Path(rel), abs_root))
+
+    out.sort(key=lambda item: len(item[1].parts), reverse=True)
+    return out
+
+
+def resolve_module_from_cwd(repo: Path, cwd: Path) -> Tuple[Optional[Tuple[str, Path, Dict[str, Any]]], List[str]]:
+    """Resolve module from cwd.
+
+    Priority:
+    1) .csk marker under cwd tree with matching module path
+    2) longest registry path prefix match
+    Returns (module_tuple, errors). On success errors is empty.
+    """
+    reg_path = repo / ".csk-app" / "registry.json"
+    reg = load_json(reg_path, default={"modules": []})
+    modules = reg.get("modules", []) if isinstance(reg, dict) else []
+    by_path = {Path(m.get("path", "")): m for m in modules if isinstance(m, dict) and isinstance(m.get("id"), str) and isinstance(m.get("path"), str)}
+
+    matches = resolve_module_path_matches(repo, cwd)
+
+    if not matches:
+        return None, [
+            "MODULE_CONTEXT_REQUIRED: current directory is not inside any module path from registry.",
+            "Run from a module worktree/module directory or pass --module-id explicitly.",
+        ]
+
+    # Prefer nearest .csk marker only when registry explicitly maps it to a module.
+    for p in [cwd.resolve()] + list(cwd.resolve().parents):
+        marker = p / ".csk"
+        if not marker.is_dir():
+            continue
+        try:
+            rel = p.relative_to(repo)
+        except ValueError:
+            continue
+        exact = [m for m in matches if m[1] == rel]
+        if exact:
+            if len(exact) == 1:
+                mid, rel_path, _ = exact[0]
+                return (mid, rel_path, by_path.get(rel_path, {})), []
+            return None, [
+                f"Ambiguous module context at marker {marker}: "
+                f"{', '.join(sorted(m[0] for m in exact))}",
+                "Use --module-id to force explicit module selection.",
+            ]
+
+    # Deepest registry match is the correct module.
+    if not matches:
+        return None, ["MODULE_CONTEXT_REQUIRED: cannot detect module context."]
+
+    max_depth = len(matches[0][1].parts)
+    top = [m for m in matches if len(m[1].parts) == max_depth]
+    if len(top) > 1:
+        return None, [
+            f"Ambiguous module context for {cwd}: "
+            f"{', '.join(sorted(m[0] for m in top))}",
+            "Use --module-id to force explicit module selection.",
+        ]
+
+    mid, rel_path, _ = top[0]
+    return (mid, rel_path, by_path.get(rel_path, {})), []
+
+
+def _registry_modules_lines(repo: Path) -> List[str]:
+    reg_path = repo / ".csk-app" / "registry.json"
+    reg = load_json(reg_path, default={"modules": []})
+    modules = reg.get("modules", []) if isinstance(reg, dict) else []
+    lines = []
+    for m in modules:
+        if isinstance(m, dict) and isinstance(m.get("id"), str) and isinstance(m.get("path"), str):
+            lines.append(f"- {m.get('id')}: {m.get('path')}")
+    return lines
+
+
+def _module_context_fail(message: str, repo: Path, details: Optional[List[str]] = None) -> None:
+    lines = [message]
+    if details:
+        lines.extend(details)
+    known = _registry_modules_lines(repo)
+    lines.append("")
+    if known:
+        lines.append("Known modules:")
+        lines.extend(known)
+    else:
+        lines.append("No modules are registered. Run `add-module` or `bootstrap --apply-candidates` first.")
+    lines.append("")
+    lines.append("Specify module explicitly with --module-id or run from the module worktree.")
+    raise SystemExit("\n".join(lines))
+
+
+def _normalize_module_task_args(args: argparse.Namespace, repo: Path, cwd: Path) -> None:
+    """Normalize commands that operate on <module, task> with dual syntax.
+
+    Supported forms:
+    - legacy: <module_id> <task_id>
+    - cwd-autodetect: <task_id> (if module is resolvable from current dir)
+    - explicit override: --module-id <module_id> <task_id_or_none?>.
+    """
+    module_override = args.module_id
+    module_or_task = args.module_or_task_id
+    task_id = args.task_id
+
+    if task_id is None:
+        # one positional arg only
+        if module_override:
+            args.module_id = module_override
+            args.task_id = module_or_task
+            return
+
+        match, errors = resolve_module_from_cwd(repo, cwd)
+        if errors:
+            _module_context_fail("MODULE_CONTEXT_REQUIRED: cannot resolve module_id.", repo, errors)
+        args.module_id = match[0] if match else None
+        args.task_id = module_or_task
+        return
+
+    # legacy syntax with explicit module in positional
+    args.module_id = module_override or module_or_task
+    args.task_id = task_id
+
+
+def _normalize_module_title_args(args: argparse.Namespace, repo: Path, cwd: Path) -> None:
+    """Normalize commands that operate on <module, title> with dual syntax."""
+    module_override = args.module_id
+    module_or_title = args.module_or_title
+    title = args.title
+
+    if title is None:
+        # one positional arg only
+        if module_override:
+            args.module_id = module_override
+            args.title = module_or_title
+            return
+
+        match, errors = resolve_module_from_cwd(repo, cwd)
+        if errors:
+            _module_context_fail("MODULE_CONTEXT_REQUIRED: cannot resolve module_id.", repo, errors)
+        args.module_id = match[0] if match else None
+        args.title = module_or_title
+        return
+
+    # legacy syntax: <module_id> <title>
+    args.module_id = module_override or module_or_title
+    args.title = title
+
+
+def _normalize_module_only_args(args: argparse.Namespace, repo: Path, cwd: Path) -> None:
+    """Normalize commands that need exactly one module and no task/title."""
+    module_override = args.module_id
+    explicit = args.module_id_arg
+
+    if module_override:
+        args.module_id = module_override
+        return
+
+    if explicit:
+        args.module_id = explicit
+        return
+
+    match, errors = resolve_module_from_cwd(repo, cwd)
+    if errors:
+        _module_context_fail("MODULE_CONTEXT_REQUIRED: cannot resolve module_id.", repo, errors)
+    args.module_id = match[0] if match else None
+
 
 def detect_stack(path: Path) -> str:
     if (path / "ProjectSettings" / "ProjectVersion.txt").exists():
@@ -327,7 +675,17 @@ def cmd_new_task(args: argparse.Namespace) -> None:
     (tdir / "run" / "proofs").mkdir(exist_ok=True)
 
     plan_tpl = (repo / "templates" / "task" / "plan.md").read_text(encoding="utf-8")
-    atomic_write_text(tdir / "plan.md", plan_tpl.replace("<module>", m["id"]).replace("<T-id>", tid).replace("<title>", args.title))
+    plan_text = plan_tpl.replace("<module>", m["id"]).replace("<T-id>", tid).replace("<title>", args.title)
+    atomic_write_text(tdir / "plan.md", plan_text)
+    sync_plan_summary(
+        repo,
+        tdir / "plan.md",
+        tdir / "plan.summary.md",
+        m["id"],
+        tid,
+        args.title,
+        require_block=True,
+    )
     slices_tpl = load_json(repo / "templates" / "task" / "slices.json")
     slices_tpl["task_id"] = tid
     slices_tpl["module"] = m["id"]
@@ -347,6 +705,8 @@ def cmd_new_task(args: argparse.Namespace) -> None:
         "slice_attempts": {}
     })
     print(f"[csk] new task: {m['id']}/{tid}")
+    print(f"[csk] plan.md: {tdir / 'plan.md'}")
+    print(f"[csk] plan.summary.md: {tdir / 'plan.summary.md'}")
 
 def cmd_freeze_plan(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
@@ -356,6 +716,26 @@ def cmd_freeze_plan(args: argparse.Namespace) -> None:
     if not plan_path.exists() or not slices_path.exists():
         raise SystemExit("Missing plan.md or slices.json")
 
+    # derive title from command/context for deterministic summary regeneration
+    title = args.task_id
+    try:
+        st = load_json(tdir / "run" / "status.json", default={})
+        title = st.get("title", title)
+    except Exception:
+        pass
+
+    summary_path = tdir / "plan.summary.md"
+    sync_plan_summary(
+        repo,
+        plan_path,
+        summary_path,
+        args.module_id,
+        args.task_id,
+        title,
+        require_block=True,
+    )
+    if not summary_path.exists():
+        raise SystemExit("Failed to write plan.summary.md while freezing.")
 
     # Validate slices.json before freezing (prevents freezing broken contracts)
     slices_obj = load_json(slices_path)
@@ -376,6 +756,7 @@ def cmd_freeze_plan(args: argparse.Namespace) -> None:
         "frozen_utc": utc_now_iso(),
         "plan_sha256": sha256_file(plan_path),
         "slices_sha256": sha256_file(slices_path),
+        "plan_summary_sha256": sha256_file(summary_path),
         "note": "Any plan change requires new Critic review + re-freeze."
     }
     atomic_write_json(tdir / "plan.freeze.json", freeze)
@@ -394,8 +775,8 @@ def cmd_approve_plan(args: argparse.Namespace) -> None:
     freeze_path = tdir / "plan.freeze.json"
     if not freeze_path.exists():
         raise SystemExit("Plan is not frozen. Run freeze-plan first.")
-    # Refuse approval if freeze has drift (plan/slices changed after freeze)
-    ok_freeze, freeze_viol = validate_freeze(tdir)
+    # Refuse approval if freeze has drift (plan/slices/summary changed after freeze)
+    ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
     if not ok_freeze:
         raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
     # Basic slices contract sanity (catches manual JSON edits early)
@@ -444,7 +825,27 @@ def cmd_approve_ready(args: argparse.Namespace) -> None:
 
     print(f"[csk] ready approved: {args.module_id}/{args.task_id}")
 
-def validate_freeze(tdir: Path) -> Tuple[bool, List[str]]:
+
+def cmd_regen_plan_summary(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    tdir, _ = task_paths(repo, args.module_id, args.task_id)
+    plan_path = tdir / "plan.md"
+    if not plan_path.exists():
+        raise SystemExit("Missing plan.md")
+    summary_path = tdir / "plan.summary.md"
+    title = load_json(tdir / "run" / "status.json", default={}).get("title", args.task_id)
+    sync_plan_summary(
+        repo,
+        plan_path,
+        summary_path,
+        args.module_id,
+        args.task_id,
+        title,
+        require_block=False,
+    )
+    print(f"[csk] regenerated plan summary: {summary_path}")
+
+def validate_freeze(tdir: Path, require_summary_hash: bool = False) -> Tuple[bool, List[str]]:
     violations: List[str] = []
     freeze = load_json(tdir / "plan.freeze.json", default=None)
     if not freeze:
@@ -456,6 +857,7 @@ def validate_freeze(tdir: Path) -> Tuple[bool, List[str]]:
         violations.append("plan.md hash mismatch vs freeze (plan drift)")
     if sha256_file(slices_path) != freeze.get("slices_sha256"):
         violations.append("slices.json hash mismatch vs freeze (plan drift)")
+    violations.extend(validate_plan_summary_hash(tdir, freeze, require_summary_hash=require_summary_hash))
     return len(violations) == 0, violations
 
 def git_changed_files(repo: Path) -> List[str]:
@@ -505,7 +907,7 @@ def cmd_scope_check(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     tdir, module_root = task_paths(repo, args.module_id, args.task_id)
 
-    ok_freeze, freeze_viol = validate_freeze(tdir)
+    ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
     if not ok_freeze:
         raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
 
@@ -612,7 +1014,7 @@ def cmd_verify(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     tdir, module_root = task_paths(repo, args.module_id, args.task_id)
 
-    ok_freeze, freeze_viol = validate_freeze(tdir)
+    ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
     if not ok_freeze and not args.allow_unfrozen:
         raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
 
@@ -691,7 +1093,7 @@ def cmd_validate_ready(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     tdir, module_root = task_paths(repo, args.module_id, args.task_id)
 
-    ok_freeze, freeze_viol = validate_freeze(tdir)
+    ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
     if not ok_freeze:
         raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
 
@@ -865,6 +1267,117 @@ def cmd_retro(args: argparse.Namespace) -> None:
     out = out_dir / f"retro-{_dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
     atomic_write_text(out, "\n".join(report_lines) + "\n")
     print(f"[csk] retro report written: {out}")
+
+
+def cmd_retro_plan(args: argparse.Namespace) -> None:
+    revo = _require_retro_engine()
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    module_filter = None
+    if args.module_id:
+        known = [str(m.get("id")) for m in reg.get("modules", []) if isinstance(m, dict) and m.get("id")]
+        if args.module_id not in known:
+            known_txt = ", ".join(known) if known else "<none>"
+            raise SystemExit(f"Unknown module id for retro-plan: {args.module_id}. Known modules: {known_txt}")
+        module_filter = args.module_id
+    res = revo.create_retro_plan(
+        repo=repo,
+        modules=reg.get("modules", []),
+        internet_research_mode=args.internet_research,
+        top_candidates=max(1, int(args.top_candidates)),
+        module_filter=module_filter,
+    )
+    print(f"[csk] retro-plan revision={res['revision_id']} root={res['revision_root']}")
+    print(f"[csk] plan={res['plan_path']}")
+    print(f"[csk] patchset={res['patchset_path']}")
+    print(f"[csk] actions={res['actions_count']}")
+
+
+def cmd_retro_approve(args: argparse.Namespace) -> None:
+    revo = _require_retro_engine()
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    res = revo.approve_revision(
+        repo=repo,
+        revision_id=args.revision_id,
+        approved_by=args.by or "user",
+        note=args.note or "",
+    )
+    print(f"[csk] retro-approved revision={args.revision_id} approval={res['approval_path']}")
+
+
+def cmd_retro_action_complete(args: argparse.Namespace) -> None:
+    revo = _require_retro_engine()
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    res = revo.action_complete(
+        repo=repo,
+        revision_id=args.revision_id,
+        action_id=args.action_id,
+        evidence=args.evidence,
+        waived=bool(args.waive),
+    )
+    print(f"[csk] retro-action updated action={args.action_id} status={res['status']}")
+
+
+def cmd_retro_apply(args: argparse.Namespace) -> None:
+    revo = _require_retro_engine()
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    validator = (lambda: _retro_validate_strict(repo)) if args.strict else None
+    try:
+        res = revo.apply_revision(
+            repo=repo,
+            modules=reg.get("modules", []),
+            revision_id=args.revision_id,
+            validate_fn=validator,
+        )
+    except RuntimeError as exc:
+        msg = str(exc)
+        if any(m in msg for m in ("overlay_hash_drift", "overlay_assets_hash_drift", "workflow_config_hash_drift")):
+            _log_workflow_drift_incident(
+                repo,
+                f"retro-apply blocked for revision {args.revision_id} due to overlay drift.",
+                evidence=msg,
+            )
+        raise SystemExit(f"retro-apply blocked: {msg}")
+    print(f"[csk] retro-applied revision={args.revision_id} report={res['apply_report']}")
+    print(f"[csk] operations={res['operations']}")
+
+
+def cmd_retro_history(args: argparse.Namespace) -> None:
+    revo = _require_retro_engine()
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    rows = revo.list_history(repo=repo, limit=max(1, int(args.limit)))
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
+    if not rows:
+        print("[csk] retro-history empty")
+        return
+    print("[csk] retro-history")
+    for row in rows:
+        print(f"- {row.get('ts')} {row.get('event')} revision={row.get('revision_id')} success={row.get('success')}")
+
+
+def cmd_retro_rollback(args: argparse.Namespace) -> None:
+    revo = _require_retro_engine()
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    validator = (lambda: _retro_validate_strict(repo)) if args.strict else None
+    try:
+        res = revo.rollback_revision(
+            repo=repo,
+            revision_id=args.to,
+            validate_fn=validator,
+        )
+    except RuntimeError as exc:
+        raise SystemExit(f"retro-rollback blocked: {exc}")
+    print(f"[csk] retro-rollback revision={args.to} restored_files={res['restored_files']}")
+
 
 def cmd_toolchain_probe(args: argparse.Namespace) -> None:
     """
@@ -1318,19 +1831,47 @@ def cmd_validate(args: argparse.Namespace) -> None:
             else:
                 warnings.append(f"{mid}/{tdir.name}: no plan.freeze.json (task may be in planning)")
 
+            # plan summary artifact (new file in this pack)
+            summary_path = tdir/"plan.summary.md"
+            if not summary_path.exists():
+                if args.strict:
+                    errors.append(f"{mid}/{tdir.name}: missing plan.summary.md (required by current workflow)")
+                else:
+                    warnings.append(f"{mid}/{tdir.name}: missing plan.summary.md (required in current workflow)")
+            elif freeze_path.exists():
+                freeze_obj = load_json(freeze_path, default={})
+                if "plan_summary_sha256" not in freeze_obj:
+                    msg = f"{mid}/{tdir.name}: plan.freeze.json missing plan_summary_sha256"
+                    if args.strict:
+                        errors.append(msg)
+                    else:
+                        warnings.append(msg)
+
             # approvals sanity
             appr_plan = tdir/"approvals"/"plan.json"
             if freeze_path.exists() and not appr_plan.exists():
                 warnings.append(f"{mid}/{tdir.name}: plan frozen but not approved (approvals/plan.json missing)")
 
-    # strict mode: upgrade warnings to errors
+    # workflow overlay evolution contracts
+    infos: List[str] = []
+    try:
+        revo = _require_retro_engine()
+        mids = [str(m.get("id")) for m in modules if isinstance(m, dict) and m.get("id")]
+        e, w, i = revo.validate_contracts(repo, mids)
+        errors += e
+        warnings += w
+        infos += i
+    except SystemExit as e:
+        warnings.append(str(e))
+
+    # strict mode: upgrade warnings to errors (infos remain advisory)
     if args.strict and warnings:
         errors += [f"(as error) {w}" for w in warnings]
         warnings = []
 
     # output
     if args.json:
-        out = {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
+        out = {"ok": len(errors) == 0, "errors": errors, "warnings": warnings, "infos": infos}
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
         if errors:
@@ -1341,7 +1882,11 @@ def cmd_validate(args: argparse.Namespace) -> None:
             print("CSK VALIDATE: WARN")
             for w in warnings:
                 print(f"- WARN: {w}")
-        if not errors and not warnings:
+        if infos:
+            print("CSK VALIDATE: INFO")
+            for msg in infos:
+                print(f"- INFO: {msg}")
+        if not errors and not warnings and not infos:
             print("CSK VALIDATE: OK")
 
     if errors:
@@ -1360,60 +1905,74 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp.set_defaults(fn=cmd_add_module)
 
     sp = sub.add_parser("new-task")
-    sp.add_argument("module_id")
-    sp.add_argument("title")
-    sp.set_defaults(fn=cmd_new_task)
+    sp.add_argument("module_or_title")
+    sp.add_argument("title", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
+    sp.set_defaults(fn=cmd_new_task, module_mode="module_title")
 
     sp = sub.add_parser("freeze-plan")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
-    sp.set_defaults(fn=cmd_freeze_plan)
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
+    sp.set_defaults(fn=cmd_freeze_plan, module_mode="module_task")
 
     sp = sub.add_parser("approve-plan")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--by", default="user")
     sp.add_argument("--note", default="")
-    sp.set_defaults(fn=cmd_approve_plan)
+    sp.set_defaults(fn=cmd_approve_plan, module_mode="module_task")
 
     sp = sub.add_parser("approve-ready")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--by", default="user")
     sp.add_argument("--note", default="")
-    sp.set_defaults(fn=cmd_approve_ready)
+    sp.set_defaults(fn=cmd_approve_ready, module_mode="module_task")
+
+    sp = sub.add_parser("regen-plan-summary")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
+    sp.set_defaults(fn=cmd_regen_plan_summary, module_mode="module_task")
 
     sp = sub.add_parser("scope-check")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--slice", default=None)
-    sp.set_defaults(fn=cmd_scope_check)
+    sp.set_defaults(fn=cmd_scope_check, module_mode="module_task")
 
     sp = sub.add_parser("verify")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--gates", default="all")
     sp.add_argument("--include-optional", action="store_true")
     sp.add_argument("--timeout-sec", type=int, default=1800)
     sp.add_argument("--allow-unfrozen", action="store_true")
     sp.add_argument("--allow-unapproved", action="store_true")
-    sp.set_defaults(fn=cmd_verify)
+    sp.set_defaults(fn=cmd_verify, module_mode="module_task")
 
     sp = sub.add_parser("record-review")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--p0", type=int, default=0)
     sp.add_argument("--p1", type=int, default=0)
     sp.add_argument("--p2", type=int, default=0)
     sp.add_argument("--p3", type=int, default=0)
     sp.add_argument("--summary", required=True)
     sp.add_argument("--fail-on-blockers", action="store_true")
-    sp.set_defaults(fn=cmd_record_review)
+    sp.set_defaults(fn=cmd_record_review, module_mode="module_task")
 
     sp = sub.add_parser("validate-ready")
-    sp.add_argument("module_id")
-    sp.add_argument("task_id")
-    sp.set_defaults(fn=cmd_validate_ready)
+    sp.add_argument("module_or_task_id")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
+    sp.set_defaults(fn=cmd_validate_ready, module_mode="module_task")
 
     sp = sub.add_parser("status")
     sp.set_defaults(fn=cmd_status)
@@ -1434,10 +1993,45 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp = sub.add_parser("retro")
     sp.set_defaults(fn=cmd_retro)
 
+    sp = sub.add_parser("retro-plan")
+    sp.add_argument("--module-id", default=None)
+    sp.add_argument("--internet-research", default="auto", choices=["auto", "off"])
+    sp.add_argument("--top-candidates", type=int, default=5)
+    sp.set_defaults(fn=cmd_retro_plan)
+
+    sp = sub.add_parser("retro-approve")
+    sp.add_argument("revision_id")
+    sp.add_argument("--by", default="user")
+    sp.add_argument("--note", default="")
+    sp.set_defaults(fn=cmd_retro_approve)
+
+    sp = sub.add_parser("retro-action-complete")
+    sp.add_argument("revision_id")
+    sp.add_argument("action_id")
+    sp.add_argument("--evidence", required=True)
+    sp.add_argument("--waive", action="store_true")
+    sp.set_defaults(fn=cmd_retro_action_complete)
+
+    sp = sub.add_parser("retro-apply")
+    sp.add_argument("revision_id")
+    sp.add_argument("--strict", action="store_true")
+    sp.set_defaults(fn=cmd_retro_apply)
+
+    sp = sub.add_parser("retro-history")
+    sp.add_argument("--limit", type=int, default=20)
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(fn=cmd_retro_history)
+
+    sp = sub.add_parser("retro-rollback")
+    sp.add_argument("--to", required=True)
+    sp.add_argument("--strict", action="store_true")
+    sp.set_defaults(fn=cmd_retro_rollback)
+
     sp = sub.add_parser("toolchain-probe")
-    sp.add_argument("module_id")
+    sp.add_argument("module_id_arg", nargs="?")
+    sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--timeout-sec", type=int, default=600)
-    sp.set_defaults(fn=cmd_toolchain_probe)
+    sp.set_defaults(fn=cmd_toolchain_probe, module_mode="module_only")
 
 
     sp = sub.add_parser("validate", help="Validate CSK contracts and logs (schemas wrapper).")
@@ -1467,6 +2061,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp.set_defaults(fn=cmd_research_new)
 
     args = p.parse_args(argv)
+    repo = find_repo_root(Path.cwd())
+    cwd = Path.cwd()
+    if getattr(args, "module_mode", None) == "module_task":
+        _normalize_module_task_args(args, repo, cwd)
+    elif getattr(args, "module_mode", None) == "module_title":
+        _normalize_module_title_args(args, repo, cwd)
+    elif getattr(args, "module_mode", None) == "module_only":
+        _normalize_module_only_args(args, repo, cwd)
+    _enforce_overlay_guard_for_command(repo, args.cmd)
     args.fn(args)
     return 0
 

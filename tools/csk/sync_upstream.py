@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -154,6 +155,15 @@ def _backup_path(src: Path, backup_target: Path) -> None:
         shutil.copy2(src, backup_target)
 
 
+def _try_yaml() -> Any | None:
+    try:
+        import yaml  # type: ignore
+
+        return yaml
+    except Exception:
+        return None
+
+
 def _frontmatter_errors(skill_path: Path) -> list[str]:
     text = skill_path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -164,20 +174,80 @@ def _frontmatter_errors(skill_path: Path) -> list[str]:
     except ValueError:
         return ["missing YAML frontmatter closing '---'"]
     header = lines[1:end_idx]
+    ymod = _try_yaml()
+    if ymod is None:
+        return [
+            "strict YAML frontmatter parser unavailable. Install PyYAML: "
+            "`python -m pip install pyyaml`"
+        ]
+    payload = "\n".join(header) + "\n"
+    try:
+        parsed = ymod.safe_load(payload)
+    except Exception as exc:  # noqa: BLE001
+        return [f"invalid YAML frontmatter ({exc})"]
+    if not isinstance(parsed, dict):
+        return ["frontmatter must be a YAML mapping/object"]
     errors: list[str] = []
-    for idx, line in enumerate(header, start=2):
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" not in line:
-            errors.append(f"line {idx}: expected key: value")
-            continue
-        key, _value = line.split(":", 1)
-        if not key.strip():
-            errors.append(f"line {idx}: empty key")
+    for key in ("name", "description"):
+        value = parsed.get(key)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"frontmatter requires non-empty string field `{key}`")
     return errors
 
 
-def _verify(root: Path, items: list[SyncItem]) -> list[str]:
+def _manifest_skill_files(root: Path, items: list[SyncItem]) -> list[Path]:
+    """Return SKILL.md files that are actually covered by manifest paths."""
+    skill_files: set[Path] = set()
+    base = root / ".agents" / "skills"
+    if not base.exists():
+        return []
+
+    for item in items:
+        p = _safe_rel(item.path)
+        if p == Path(".agents", "skills"):
+            for skill_file in base.rglob("SKILL.md"):
+                skill_files.add(skill_file)
+            continue
+
+        if not str(p).startswith(".agents/skills/"):
+            continue
+
+        candidate = root / p
+        if candidate.name == "SKILL.md":
+            if candidate.exists():
+                skill_files.add(candidate)
+            continue
+
+        if candidate.is_dir():
+            for skill_file in candidate.rglob("SKILL.md"):
+                skill_files.add(skill_file)
+
+    return sorted(skill_files, key=lambda pth: pth.as_posix())
+
+
+def _preflight_dependencies(root: Path, items: list[SyncItem]) -> list[str]:
+    errors: list[str] = []
+    skill_files = _manifest_skill_files(root, items)
+    if skill_files and _try_yaml() is None:
+        errors.append("preflight: strict YAML parser unavailable; install PyYAML (`python -m pip install pyyaml`)")
+
+    needs_csk_cli_probe = any(
+        item.path == "tools/csk/csk.py" or item.path.startswith("tools/csk/")
+        for item in items
+    )
+    if needs_csk_cli_probe:
+        csk_py = root / "tools" / "csk" / "csk.py"
+        if not csk_py.exists():
+            errors.append("preflight: csk.py is missing in checked paths")
+        else:
+            probe = _run([sys.executable, str(csk_py), "-h"], cwd=root)
+            if probe.returncode != 0:
+                errors.append(f"preflight: csk.py -h failed: {probe.stderr.strip() or probe.stdout.strip()}")
+
+    return errors
+
+
+def _content_health_check(root: Path, items: list[SyncItem]) -> list[str]:
     errors: list[str] = []
     for item in items:
         rel = _safe_rel(item.path)
@@ -185,19 +255,80 @@ def _verify(root: Path, items: list[SyncItem]) -> list[str]:
         if item.required and not target.exists():
             errors.append(f"required path missing after sync: {item.path}")
 
-    skills_root = root / ".agents" / "skills"
-    if skills_root.exists():
-        for skill_file in sorted(skills_root.glob("*/SKILL.md")):
-            fm_errors = _frontmatter_errors(skill_file)
+    for skill_file in _manifest_skill_files(root, items):
+        if not skill_file.exists():
+            # Missing optional skill paths are handled by required-path checks above.
+            continue
+        fm_errors = _frontmatter_errors(skill_file)
+        if fm_errors:
             for err in fm_errors:
                 errors.append(f"{skill_file}: {err}")
 
-    csk_py = root / "tools" / "csk" / "csk.py"
-    if csk_py.exists():
-        probe = _run([sys.executable, str(csk_py), "-h"], cwd=root)
-        if probe.returncode != 0:
-            errors.append(f"csk.py -h failed: {probe.stderr.strip() or probe.stdout.strip()}")
     return errors
+
+
+def _verify(root: Path, items: list[SyncItem]) -> list[str]:
+    # Backward-compatible shim: runtime preflight now explicit; verify checks content only.
+    return _content_health_check(root, items)
+
+
+def _snapshot_state(
+    root: Path,
+    target: Path,
+    backup_root: Path,
+    snapshots: list[dict[str, Any]],
+    seen: set[str],
+) -> None:
+    rel = target.relative_to(root)
+    key = rel.as_posix()
+    if key in seen:
+        return
+    seen.add(key)
+
+    entry: dict[str, Any] = {
+        "path": key,
+        "existed": target.exists(),
+        "is_dir": target.is_dir(),
+        "backup": None,
+    }
+    if target.exists():
+        backup_path = backup_root / key
+        _backup_path(target, backup_path)
+        entry["backup"] = str(backup_path)
+        entry["backup_is_dir"] = backup_path.is_dir()
+    snapshots.append(entry)
+
+
+def _restore_state(root: Path, backup_root: Path, snapshots: list[dict[str, Any]]) -> None:
+    for entry in sorted(snapshots, key=lambda x: len(x["path"]), reverse=True):
+        target = root / entry["path"]
+        if target.exists() and not target.is_symlink():
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
+        elif target.exists():
+            target.unlink()
+
+        backup = entry.get("backup")
+        if not backup:
+            continue
+
+        backup_path = Path(backup)
+        if not backup_path.exists():
+            continue
+
+        if backup_path.is_dir():
+            if not backup_path.is_relative_to(backup_root):
+                # legacy safety: do not restore from unknown locations
+                continue
+            shutil.copytree(backup_path, target)
+        elif backup_path.is_file():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup_path, target)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup_path, target)
 
 
 def _load_manifest(path: Path) -> list[SyncItem]:
@@ -405,14 +536,41 @@ def _resolve_backup_path(root: Path, selected: str | None) -> Path | None:
 
 def _validate_decision_file(path: Path) -> dict[str, Any]:
     data = _load_json(path)
+    if not isinstance(data, dict):
+        raise SyncError("Decision file must be a JSON object.")
+
+    if "selected_backup" not in data:
+        raise SyncError("Decision file: missing required `selected_backup`.")
+    if "confidence" not in data:
+        raise SyncError("Decision file: missing required `confidence`.")
+    if "rationale" not in data:
+        raise SyncError("Decision file: missing required `rationale`.")
+    if "candidate_table" not in data:
+        raise SyncError("Decision file: missing required `candidate_table`.")
+    if "approved_by_human" not in data:
+        raise SyncError("Decision file: missing required `approved_by_human`.")
+    if "approved_at" not in data:
+        raise SyncError("Decision file: missing required `approved_at`.")
+
+    if data["selected_backup"] is not None and not isinstance(data["selected_backup"], str):
+        raise SyncError("Decision file: `selected_backup` must be string or null.")
+
+    if not isinstance(data["confidence"], (float, int)) or isinstance(data["confidence"], bool):
+        raise SyncError("Decision file: `confidence` must be a number.")
+    conf = float(data["confidence"])
+    if not math.isfinite(conf) or conf < 0.0 or conf > 1.0:
+        raise SyncError("Decision file: `confidence` must be in [0, 1].")
     if "candidate_table" in data and not isinstance(data["candidate_table"], list):
         raise SyncError("Decision file: `candidate_table` must be an array.")
-    if "confidence" in data and not isinstance(data["confidence"], (float, int)):
-        raise SyncError("Decision file: `confidence` must be a number.")
+    if data["candidate_table"] and any(not isinstance(x, dict) for x in data["candidate_table"]):
+        raise SyncError("Decision file: `candidate_table` must contain only objects.")
     if "rationale" in data and not isinstance(data["rationale"], str):
         raise SyncError("Decision file: `rationale` must be a string.")
-    if "selected_backup" in data and data["selected_backup"] is not None and not isinstance(data["selected_backup"], str):
-        raise SyncError("Decision file: `selected_backup` must be string or null.")
+    if not isinstance(data["approved_by_human"], bool):
+        raise SyncError("Decision file: `approved_by_human` must be boolean.")
+    if data["approved_at"] is not None and not isinstance(data["approved_at"], str):
+        raise SyncError("Decision file: `approved_at` must be string or null.")
+
     return data
 
 
@@ -434,31 +592,48 @@ def _validate_json_path(path: Path) -> list[str]:
     return errors
 
 
-def _has_overlay_content(overlay_root: Path, items: list[SyncItem]) -> bool:
-    for item in items:
-        rel = _safe_rel(item.path)
-        if (overlay_root / rel).exists():
-            return True
-    return False
-
-
-def _plan_overlay_from_sources(
+def _plan_overlay_actions(
     root: Path,
     source_root: Path,
     overlay_root: Path,
     items: list[SyncItem],
     selected_backup: Path | None,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    actions: list[dict[str, Any]] = []
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], list[str], list[str], list[str]]:
+    write_actions: list[dict[str, Any]] = []
+    apply_actions: list[dict[str, Any]] = []
     blockers: list[str] = []
     backup_fallback_paths: list[str] = []
+    existing_overlay_paths: list[str] = []
+    bootstrap_overlay_paths: list[str] = []
 
     for item in items:
+        if item.merge_mode == "manual_only":
+            blockers.append(f"manual_only path requires explicit manual migration: {item.path}")
+            continue
+
         rel = _safe_rel(item.path)
+        overlay_path = overlay_root / rel
         upstream_path = source_root / rel
+        if overlay_path.exists():
+            existing_overlay_paths.append(item.path)
+            if item.merge_mode == "replace_core":
+                blockers.append(f"replace_core path cannot have overlay overrides: {item.path}")
+                continue
+            json_errors = _validate_json_path(overlay_path)
+            if json_errors:
+                blockers.extend(json_errors)
+                continue
+            apply_actions.append(
+                {
+                    "type": "apply_overlay",
+                    "path": item.path,
+                    "overlay_source": str(overlay_path),
+                }
+            )
+            continue
+
         backup_path = (selected_backup / rel) if selected_backup is not None else None
         current_path = root / rel
-
         source_path: Path | None = None
         source_kind: str | None = None
         if backup_path is not None and backup_path.exists():
@@ -468,30 +643,22 @@ def _plan_overlay_from_sources(
             source_path = current_path
             source_kind = "current"
             backup_fallback_paths.append(item.path)
-
         if source_path is None:
             continue
 
         if _path_hash(source_path) == _path_hash(upstream_path):
             continue
 
-        if item.merge_mode == "manual_only":
-            blockers.append(f"manual_only path requires manual migration: {item.path}")
-            continue
-
         if item.merge_mode == "replace_core":
-            blockers.append(
-                f"replace_core path has local divergence and cannot be auto-migrated: {item.path}"
-            )
+            blockers.append(f"replace_core path has local divergence and cannot be auto-migrated: {item.path}")
             continue
-
         json_errors = _validate_json_path(source_path)
         if json_errors:
             blockers.extend(json_errors)
             continue
 
         overlay_target = overlay_root / rel
-        actions.append(
+        write_actions.append(
             {
                 "type": "write_overlay",
                 "path": item.path,
@@ -500,42 +667,23 @@ def _plan_overlay_from_sources(
                 "overlay_target": str(overlay_target),
             }
         )
-
-    return actions, blockers, backup_fallback_paths
-
-
-def _plan_overlay_from_existing(overlay_root: Path, items: list[SyncItem]) -> tuple[list[dict[str, Any]], list[str]]:
-    actions: list[dict[str, Any]] = []
-    blockers: list[str] = []
-
-    for item in items:
-        rel = _safe_rel(item.path)
-        overlay_path = overlay_root / rel
-        if not overlay_path.exists():
-            continue
-
-        if item.merge_mode == "manual_only":
-            blockers.append(f"manual_only path has overlay but auto-apply is disabled: {item.path}")
-            continue
-
-        if item.merge_mode == "replace_core":
-            blockers.append(f"replace_core path cannot have overlay overrides: {item.path}")
-            continue
-
-        json_errors = _validate_json_path(overlay_path)
-        if json_errors:
-            blockers.extend(json_errors)
-            continue
-
-        actions.append(
+        apply_actions.append(
             {
                 "type": "apply_overlay",
                 "path": item.path,
-                "overlay_source": str(overlay_path),
+                "overlay_source": str(overlay_target),
             }
         )
+        bootstrap_overlay_paths.append(item.path)
 
-    return actions, blockers
+    return (
+        write_actions,
+        apply_actions,
+        blockers,
+        backup_fallback_paths,
+        existing_overlay_paths,
+        bootstrap_overlay_paths,
+    )
 
 
 def _apply_overlay_actions(root: Path, actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -791,6 +939,11 @@ def run_apply_or_migrate(
     confidence = float(decision_raw.get("confidence", 0.0))
     rationale = decision_raw.get("rationale", "")
     selected_backup = _resolve_backup_path(root, selected_raw)
+    if selected_raw is not None and selected_backup is None:
+        raise SyncError(
+            "Decision selected_backup does not resolve to an existing backup directory: "
+            f"{selected_raw!r}."
+        )
 
     dirty_paths = _git_dirty_paths(root, items)
 
@@ -802,7 +955,9 @@ def run_apply_or_migrate(
         "results": [],
         "overlay_results": [],
         "backup_dir": None,
+        "preflight_errors": [],
         "verify_errors": [],
+        "post_verify_blocked": False,
         "success": False,
         "decision_file": str(decision_path),
         "decision": {
@@ -817,6 +972,11 @@ def run_apply_or_migrate(
         "checklist": None,
         "conflicts": [],
         "overlay_root": str(overlay_root),
+    }
+    report["rollback"] = {
+        "performed": False,
+        "manifest": None,
+        "errors": [],
     }
 
     history_path = state_path.parent / "history.jsonl"
@@ -880,41 +1040,62 @@ def run_apply_or_migrate(
         )
         return report
 
+    preflight_errors = _preflight_dependencies(root, items)
+    if preflight_errors:
+        report["preflight_errors"] = preflight_errors
+        report["conflicts"].append("preflight_blocked")
+        checklist = _write_checklist(
+            root,
+            "Preflight checks blocked csk apply/migrate",
+            [
+                "Install missing runtime dependencies and rerun apply/migrate.",
+                *preflight_errors,
+            ],
+        )
+        report["checklist"] = str(checklist)
+        report["finished_at"] = _now_stamp()
+        report_path = _save_report(root, report)
+        report["_saved_report_path"] = str(report_path)
+        _append_history(
+            history_path,
+            mode,
+            source_url,
+            source_ref,
+            None,
+            None if selected_backup is None else str(selected_backup),
+            confidence,
+            "blocked",
+            report["conflicts"],
+            report_path,
+            decision_path,
+        )
+        return report
+
     with tempfile.TemporaryDirectory(prefix="csk-upstream-") as tmp:
         source_dir = Path(tmp) / "source"
         source_commit = _clone_source(source_url, source_ref, source_dir)
         report["source_commit"] = source_commit
 
-        overlay_bootstrap_needed = not _has_overlay_content(overlay_root, items)
-        report["overlay_bootstrap_needed"] = overlay_bootstrap_needed
-
-        overlay_bootstrap_actions: list[dict[str, Any]] = []
-        overlay_apply_actions: list[dict[str, Any]] = []
-        backup_fallback_paths: list[str] = []
-
-        if overlay_bootstrap_needed:
-            overlay_bootstrap_actions, blockers, backup_fallback_paths = _plan_overlay_from_sources(
-                root=root,
-                source_root=source_dir,
-                overlay_root=overlay_root,
-                items=items,
-                selected_backup=selected_backup,
-            )
-            report["backup_fallback_paths"] = backup_fallback_paths
-            if blockers:
-                report["conflicts"].extend(blockers)
-            overlay_apply_actions = [
-                {
-                    "type": "apply_overlay",
-                    "path": action["path"],
-                    "overlay_source": action["overlay_target"],
-                }
-                for action in overlay_bootstrap_actions
-            ]
-        else:
-            overlay_apply_actions, blockers = _plan_overlay_from_existing(overlay_root, items)
-            if blockers:
-                report["conflicts"].extend(blockers)
+        (
+            overlay_bootstrap_actions,
+            overlay_apply_actions,
+            blockers,
+            backup_fallback_paths,
+            existing_overlay_paths,
+            bootstrap_overlay_paths,
+        ) = _plan_overlay_actions(
+            root=root,
+            source_root=source_dir,
+            overlay_root=overlay_root,
+            items=items,
+            selected_backup=selected_backup,
+        )
+        report["overlay_bootstrap_needed"] = bool(overlay_bootstrap_actions)
+        report["overlay_bootstrap_paths"] = bootstrap_overlay_paths
+        report["overlay_existing_paths"] = existing_overlay_paths
+        report["backup_fallback_paths"] = backup_fallback_paths
+        if blockers:
+            report["conflicts"].extend(blockers)
 
         if report["conflicts"]:
             checklist = _write_checklist(
@@ -922,7 +1103,7 @@ def run_apply_or_migrate(
                 "CSK migrate conflicts",
                 [
                     "Resolve listed conflicts before rerunning apply/migrate.",
-                    "For manual_only paths, apply changes manually then remove conflict condition.",
+                    "For manual_only paths, complete manual migration and keep them out of auto-apply scope.",
                     "For replace_core paths, remove overlay/local divergence or change merge_mode in manifest.",
                 ],
             )
@@ -936,7 +1117,7 @@ def run_apply_or_migrate(
                 source_url,
                 source_ref,
                 source_commit,
-                str(selected_backup),
+                None if selected_backup is None else str(selected_backup),
                 confidence,
                 "blocked",
                 report["conflicts"],
@@ -948,37 +1129,91 @@ def run_apply_or_migrate(
         backup_dir = root / ".csk-app" / "backups" / f"csk-sync-{_now_stamp()}"
         backup_dir.mkdir(parents=True, exist_ok=True)
         report["backup_dir"] = str(backup_dir)
+        backup_manifest_path = backup_dir / "backup_manifest.json"
+        pre_state: list[dict[str, Any]] = []
+        seen_snapshot: set[str] = set()
 
-        if overlay_bootstrap_actions:
-            report["overlay_results"].extend(_apply_overlay_actions(root, overlay_bootstrap_actions))
+        try:
+            for item in items:
+                rel = _safe_rel(item.path)
+                upstream_path = source_dir / rel
+                if upstream_path.exists():
+                    _snapshot_state(root, root / rel, backup_dir, pre_state, seen_snapshot)
+            for action in overlay_apply_actions:
+                _snapshot_state(
+                    root,
+                    root / _safe_rel(str(action["path"])),
+                    backup_dir,
+                    pre_state,
+                    seen_snapshot,
+                )
+            for action in overlay_bootstrap_actions:
+                overlay_target = Path(action["overlay_target"])
+                _snapshot_state(root, overlay_target, backup_dir, pre_state, seen_snapshot)
 
-        report["results"] = _apply_core_sync(root, source_dir, items, backup_dir)
+            if pre_state:
+                _write_json(
+                    backup_manifest_path,
+                    {
+                        "created_at": _iso_now(),
+                        "source_url": source_url,
+                        "source_ref": source_ref,
+                        "mode": mode,
+                        "items": pre_state,
+                    },
+                )
+                report["backup_manifest"] = str(backup_manifest_path)
 
-        if overlay_apply_actions:
-            report["overlay_results"].extend(_apply_overlay_actions(root, overlay_apply_actions))
+            if overlay_bootstrap_actions:
+                report["overlay_results"].extend(_apply_overlay_actions(root, overlay_bootstrap_actions))
+            report["results"] = _apply_core_sync(root, source_dir, items, backup_dir)
+            if overlay_apply_actions:
+                report["overlay_results"].extend(_apply_overlay_actions(root, overlay_apply_actions))
+            if verify:
+                report["verify_errors"] = _content_health_check(root, items)
+                if report["verify_errors"]:
+                    report["post_verify_blocked"] = True
+                    raise SyncError("postapply content verification failed")
+        except Exception as exc:  # noqa: BLE001
+            try:
+                if pre_state:
+                    _restore_state(root, backup_dir, pre_state)
+                    report["rollback"]["performed"] = True
+                backup_manifest_path = backup_dir / "restore.json"
+                _write_json(
+                    backup_manifest_path,
+                    {
+                        "created_at": _iso_now(),
+                        "status": "restored",
+                        "error": str(exc),
+                    },
+                )
+                report["rollback"]["manifest"] = str(backup_manifest_path)
+            except Exception as rollback_exc:  # noqa: BLE001
+                report["rollback"]["errors"].append(f"rollback failed: {rollback_exc}")
 
-    if verify:
-        report["verify_errors"] = _verify(root, items)
+            report["finished_at"] = _now_stamp()
+            if report.get("verify_errors"):
+                report["conflicts"].append("postverify_blocked")
+            else:
+                report["conflicts"].append("mutation_failed")
 
-    if report["verify_errors"]:
-        report["finished_at"] = _now_stamp()
-        report["success"] = False
-        report_path = _save_report(root, report)
-        report["_saved_report_path"] = str(report_path)
-        _append_history(
-            history_path,
-            mode,
-            source_url,
-            source_ref,
-            report.get("source_commit"),
-            str(selected_backup),
-            confidence,
-            "failed",
-            report["verify_errors"],
-            report_path,
-            decision_path,
-        )
-        return report
+            report_path = _save_report(root, report)
+            report["_saved_report_path"] = str(report_path)
+            _append_history(
+                history_path,
+                mode,
+                source_url,
+                source_ref,
+                report.get("source_commit"),
+                None if selected_backup is None else str(selected_backup),
+                confidence,
+                "failed",
+                report["conflicts"],
+                report_path,
+                decision_path,
+            )
+            return report
 
     _write_state(
         state_path=state_path,
@@ -1144,6 +1379,20 @@ def main() -> int:
         print(f"[csk-sync] decision_template={report['decision_template']}")
     if report.get("checklist"):
         print(f"[csk-sync] checklist={report['checklist']}")
+    if report.get("preflight_errors"):
+        print("[csk-sync] preflight errors:")
+        for err in report["preflight_errors"]:
+            print(f"- {err}")
+    if report.get("rollback"):
+        rollback = report["rollback"]
+        if rollback.get("performed"):
+            print("[csk-sync] rollback executed.")
+        if rollback.get("errors"):
+            print("[csk-sync] rollback issues:")
+            for err in rollback["errors"]:
+                print(f"- {err}")
+        if rollback.get("manifest"):
+            print(f"[csk-sync] rollback_manifest={rollback['manifest']}")
     if report.get("verify_errors"):
         print("[csk-sync] verification errors:")
         for err in report["verify_errors"]:

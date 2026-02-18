@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK review profiles",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "default_review_profile",
+    "profiles"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "default_review_profile": {
+      "type": "string"
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "max_allowed",
+          "required_checks"
+        ],
+        "properties": {
+          "max_allowed": {
+            "type": "object"
+          },
+          "required_checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

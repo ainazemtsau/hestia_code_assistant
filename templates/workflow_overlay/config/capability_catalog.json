@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "playwright-mcp",
+      "kind": "mcp",
+      "description": "Browser automation MCP for UI/E2E workflows.",
+      "source": "github.com",
+      "url": "https://github.com/microsoft/playwright-mcp",
+      "tags": [
+        "ui-e2e",
+        "browser"
+      ],
+      "risk_score": 0.65,
+      "install_steps": [
+        "codex mcp add playwright -- npx -y @playwright/mcp",
+        "codex mcp list"
+      ],
+      "verify_steps": [
+        "run smoke e2e scenario"
+      ]
+    },
+    {
+      "id": "skill-creator",
+      "kind": "skill",
+      "description": "Guided flow to create local reusable skills.",
+      "source": "local",
+      "url": "",
+      "tags": [
+        "skilling",
+        "workflow"
+      ],
+      "risk_score": 0.2,
+      "install_steps": [
+        "create skill draft in overlay and review"
+      ],
+      "verify_steps": [
+        "load SKILL.md and validate frontmatter"
+      ]
+    }
+  ]
+}

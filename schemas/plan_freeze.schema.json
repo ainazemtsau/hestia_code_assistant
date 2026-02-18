@@ -25,6 +25,9 @@
     "slices_sha256": {
       "type": "string"
     },
+    "plan_summary_sha256": {
+      "type": "string"
+    },
     "note": {
       "type": "string"
     }

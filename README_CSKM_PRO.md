@@ -50,3 +50,6 @@ See `.gitignore`.
 
 Recommended preflight:
 - Validate contracts: `python ./tools/csk/csk.py validate --all --strict`
+
+Inside a module directory, module-scoped commands can be run without repeating module id:
+`python ./tools/csk/csk.py verify <task-id>`, `python ./tools/csk/csk.py scope-check <task-id> --slice S-001`, etc.

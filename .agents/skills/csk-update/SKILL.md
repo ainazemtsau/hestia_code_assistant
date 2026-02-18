@@ -22,14 +22,18 @@ Operator flow (always in this order)
 - `python tools/csk/sync_upstream.py apply --decision-file <path> --approve-decision`
 5) Confirm success:
 - Check `.csk-app/reports/csk-sync-*.json` for `"success": true`
-- Ensure no verification errors in command output
+- Ensure there is no preflight block and no verification errors in command output.
 
 Safety rules
 - Do not skip dry-run.
 - Do not run `apply`/`migrate` without `--decision-file` and `--approve-decision`.
 - Do not delete runtime proofs under `modules/*/.csk/**/run`.
 - If confidence is low or backup is not selected, stop and follow generated checklist.
-- If verification fails, stop and report errors before any additional actions.
+- Runtime preflight (`PyYAML`, `csk.py -h` when applicable) runs before any file mutation.
+- `--skip-verify` skips only content checks; preflight always runs.
+- If verification or runtime preflight fails, stop and rollback/report without leaving partial state.
+- Keep retro-evolution artifacts under `.csk-app/overlay/workflow/**` durable and intact.
+- `manual_only` merge mode is strict: treat it as manual checklist-only path.
 
 Optional pins
 - Update from a specific tag/branch:
@@ -38,4 +42,8 @@ Optional pins
 Modes
 - `dry-run` (default): compatibility mode, no writes.
 - `plan`: writes decision template + candidate analysis.
-- `migrate` / `apply`: requires approved decision, applies core sync, overlay reapply, state/history updates.
+- `migrate` / `apply`: requires approved decision, bootstraps missing overlay paths per manifest item, applies core sync, then overlay reapply.
+
+Notes
+- `.agents/skills/csk-update` is part of sync manifest and now self-updates with the orchestrator.
+- SKILL frontmatter verify is strict YAML; install parser if missing: `python -m pip install pyyaml`.

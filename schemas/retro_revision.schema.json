@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK retro revision plan",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "revision_id",
+    "created_at",
+    "status",
+    "capability_gaps",
+    "actions",
+    "patchset_operation_count"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "revision_id": {
+      "type": "string",
+      "pattern": "^REV-[0-9]{8}T[0-9]{6}Z$"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "approved",
+        "applied",
+        "rolled_back",
+        "failed"
+      ]
+    },
+    "capability_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "patchset_operation_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

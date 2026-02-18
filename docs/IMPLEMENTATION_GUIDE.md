@@ -27,22 +27,34 @@ Per module:
 - AGENTS.md
 - PUBLIC_API.md
 - .csk/toolchain.json
-- .csk/tasks/<task>/{plan.md,slices.json,plan.freeze.json,approvals/*}
+- .csk/tasks/<task>/{plan.md,plan.summary.md,slices.json,plan.freeze.json,approvals/*}
 
 ## Plan Gate (deep planning)
 For each task:
-1) Create plan.md + slices.json
+1) Create plan.md + plan.summary.md + slices.json (plan summary is generated automatically from the shareable block in plan.md).
 2) Run Critic ($csk-critic) until no P0/P1
-3) Freeze (`python tools/csk/csk.py freeze-plan ...`)
-4) Plan approval (`python tools/csk/csk.py approve-plan ...`)
+3) Freeze (`python tools/csk/csk.py freeze-plan <module> <task>` legacy)
+4) Plan approval (`python tools/csk/csk.py approve-plan <module> <task>` legacy)
 
-Freeze writes `plan.freeze.json` with SHA256 of plan + slices.
+Freeze writes `plan.freeze.json` with SHA256 of:
+- `plan.md` (`plan_sha256`)
+- `slices.json` (`slices_sha256`)
+- `plan.summary.md` (`plan_summary_sha256`)
 Any change invalidates the freeze; tools detect drift and block execution.
+
+Shareable plan output:
+- `plan.summary.md` is the artifact for inter-chat sharing.
+- `plan.md` remains the source of truth for critic/review/audit.
+
+Migration for existing tasks:
+- If `plan.md` was created before this change, use `python tools/csk/csk.py regen-plan-summary <module> <task>`.
+- If `plan.md` lacks `PLAN_SUMMARY_START/END`, command creates `plan.summary.md` with a `Needs cleanup` placeholder that must be replaced.
 
 ## Scope enforcement
 Each slice declares allowed_paths (module-relative globs).
 Before verify, run:
-- `python tools/csk/csk.py scope-check <module> <task> --slice S-001`
+- from module directory: `python tools/csk/csk.py scope-check <task> --slice S-001`
+- legacy: `python tools/csk/csk.py scope-check <module> <task> --slice S-001`
 This fails if:
 - any changed file is outside module root
 - any changed file is outside allowed_paths
@@ -51,7 +63,8 @@ This fails if:
 A scope proof JSON is written to run/proofs.
 
 ## Verify enforcement
-`python tools/csk/csk.py verify <module> <task> --gates all`
+from module directory: `python tools/csk/csk.py verify <task> --gates all`
+legacy: `python tools/csk/csk.py verify <module> <task> --gates all`
 - reads `.csk/toolchain.json`
 - runs required gates deterministically
 - writes verify proof JSON
@@ -60,7 +73,8 @@ No guessing commands: missing required gate command is a failure and must trigge
 
 ## Review enforcement
 A review must be recorded as a machine-readable summary:
-- `python tools/csk/csk.py record-review <module> <task> --p0 0 --p1 0 --summary "..."`
+- from module directory: `python tools/csk/csk.py record-review <task> --p0 0 --p1 0 --summary "..."`
+- legacy: `python tools/csk/csk.py record-review <module> <task> --p0 0 --p1 0 --summary "..."`
 
 (You can still write a review.md, but validate-ready uses review.json.)
 
@@ -72,7 +86,8 @@ Approvals are stored under `.csk/tasks/<task>/approvals/`.
 
 ## READY validation (hard)
 Before claiming READY:
-- `python tools/csk/csk.py validate-ready <module> <task>`
+- from module directory: `python tools/csk/csk.py validate-ready <task>`
+- legacy: `python tools/csk/csk.py validate-ready <module> <task>`
 
 This checks:
 - freeze is valid (no drift)

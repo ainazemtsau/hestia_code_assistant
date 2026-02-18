@@ -11,6 +11,11 @@ The updater now uses:
 - Overlay layer: `.csk-app/overlay/<manifest-path>` project-specific overrides.
 - Decision gate: AI backup recommendation + human approval.
 
+Retro workflow evolution is stored separately:
+- `.csk-app/overlay/workflow/**`
+- managed only by `csk.py retro-*` lifecycle
+- not replaced by normal core sync operations
+
 ## Modes
 
 1. `dry-run` (default)
@@ -25,11 +30,18 @@ The updater now uses:
 3. `apply` / `migrate`
    - `python tools/csk/sync_upstream.py apply --decision-file <path> --approve-decision`
    - Requires approved decision and confidence threshold.
-   - Applies core replacement, then reapplies overlay.
+   - Bootstraps missing overlay paths per manifest item (`backup -> current`), applies core replacement, then reapplies overlay.
    - Writes:
      - state: `.csk-app/sync/state.json`
      - history: `.csk-app/sync/history.jsonl`
      - reports: `.csk-app/reports/csk-sync-*.json`
+   - Runtime preflight happens before any file write:
+     - PyYAML is required when any synced SKILL path is present.
+     - `python tools/csk/csk.py -h` is checked when manifest covers `tools/csk` paths.
+     - failure in preflight blocks apply/migrate and records blocked outcome in report/history.
+   - Post-sync verification is optional:
+     - `--skip-verify` disables content checks only (`_content_health_check`) and does not bypass preflight.
+     - verify failures or fatal exceptions during migration trigger rollback from backup manifest.
 
 ## Decision contract
 
@@ -56,7 +68,18 @@ If confidence is low or backup is not selected:
 Defined per path in `tools/csk/upstream_sync_manifest.json`:
 - `overlay_allowed` (default): core replaced, overlay reapplied.
 - `replace_core`: no overlay divergence allowed.
-- `manual_only`: auto merge disabled, checklist required.
+- `manual_only`: strict manual gate (always checklist, no auto-merge).
+
+## SKILL frontmatter validation
+
+- Sync verification uses strict YAML parsing for `SKILL.md` frontmatter.
+- Required fields: `name`, `description` (non-empty strings).
+- If parser is missing, install PyYAML:
+  - `python -m pip install pyyaml`
+- If parser is missing and preflight catches it, no file writes are performed.
+
+`csk-update` orchestrator path is included in manifest:
+- `.agents/skills/csk-update`
 
 ## Pin to tag/branch
 

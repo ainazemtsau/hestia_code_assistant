@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "allowed_sources": [
+    "local",
+    "github.com"
+  ],
+  "max_risk_score": 0.7,
+  "notes": "Safety-first defaults: unknown sources are blocked."
+}

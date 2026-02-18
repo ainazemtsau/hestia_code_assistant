@@ -1,42 +1,71 @@
-# Plan — <module> — Task <T-id>
+# Plan — <module> — Task <T-id> — <title>
 
-## Goal
-(1–2 sentences)
+## План для шаринга
+<!-- PLAN_SUMMARY_START -->
+### Цель
+- краткая цель задачи (1–2 предложения)
 
-## Acceptance criteria (testable)
+### Результат для пользователя
+- конкретный видимый эффект после релиза
+
+### Шаги (3–5)
+1.
+2.
+3.
+
+### Acceptance criteria
+- AC1:
+- AC2:
+- AC3:
+- AC4:
+- AC5:
+
+### Out of scope
+- ...
+
+### Риски / ограничения
+- ...
+<!-- PLAN_SUMMARY_END -->
+
+## Детальный план (для исполнения и аудита)
+
+### Goal
+- ...
+
+### Acceptance criteria (testable)
 - AC1:
 - AC2:
 
-## Non-goals
+### Non-goals
 - ...
 
-## Assumptions / constraints
+### Assumptions / constraints
 - ...
 
-## Cross-module impact (if any)
+### Cross-module impact (if any)
 - Owner API changes? (yes/no)
 - Consumers to update: (list module ids)
 - Public API docs to update: (yes/no)
 
-## Traceability
+### Traceability
 - Research links: (R-ids or paths)
 - Decisions: (D-ids)
 - Related incidents: (I-ids)
 
-## Slices (atomic)
+### Slices (atomic)
 ### S-001: <title>
 - Allowed paths (module-relative globs):
 - Forbidden paths:
-- Scope (what changes):
+- Scope (что меняем):
 - Dependencies:
 - Verify:
 - Risks:
 - Done when:
 
 ### S-002: <title>
-...
+- ...
 
-## Proof pack required
+### Proof pack required
 - scope-check: required
 - verify: required
 - review: required

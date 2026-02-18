@@ -17,8 +17,8 @@ Hard rules
 - If required gate cmd is missing or fails:
   - log an incident
   - propose deterministic fix (setup script, pin version, install step)
-- Suggest running `python tools/csk/csk.py toolchain-probe <module>` when safe.
+- Suggest running `python tools/csk/csk.py toolchain-probe` from module root
+  (legacy: `python tools/csk/csk.py toolchain-probe <module>`) when safe.
 
 Outputs
 - A proposed patch list (toolchain.json, Local Environments setup/actions).
-

@@ -12,6 +12,7 @@ Contracts (files)
 - `<module>/.csk/toolchain.json` -> `schemas/toolchain.schema.json`
 - `<module>/.csk/tasks/<task>/slices.json` -> `schemas/slices.schema.json`
 - `<module>/.csk/tasks/<task>/plan.freeze.json` -> `schemas/plan_freeze.schema.json`
+- `<module>/.csk/tasks/<task>/plan.summary.md` -> human-readable short-plan artifact (shareable summary)
 - runtime proofs under `run/proofs/`:
   - verify -> `schemas/verify_proof.schema.json`
   - scope -> `schemas/scope_proof.schema.json`

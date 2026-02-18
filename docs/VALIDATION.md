@@ -46,6 +46,7 @@ python tools/csk/csk.py validate --json
 - `.csk/toolchain.json` structure + required gate commands must not be empty
 - `tasks/*/slices.json` structure (allowed_paths/required_gates)
 - `plan.freeze.json` drift (hash mismatch)
+- `plan.summary.md` presence + `plan_summary_sha256` hash consistency
 - incidents/decisions/backlog jsonl structural validity
 
 Note: validation is intentionally conservative; it does not modify files.

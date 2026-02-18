@@ -1,6 +1,6 @@
 # Local Environments presets (Codex app) — CSK‑M Pro v2
 
-Local environments are configured via the Codex app UI. The app writes a config file into `.codex/`.
+- Local environments are configured via the Codex app UI. The app writes a config file into `.codex/`.
 Commit that app-generated file.
 
 ## Setup script (safe bootstrap)
@@ -19,10 +19,10 @@ Then customize by stack:
 
 ## Suggested actions
 - Status: `python ./tools/csk/csk.py status`
-- Toolchain probe (module): `python ./tools/csk/csk.py toolchain-probe <module-id>`
-- Verify: `python ./tools/csk/csk.py verify <module-id> <task-id> --gates all`
-- Scope check: `python ./tools/csk/csk.py scope-check <module-id> <task-id> --slice S-001`
-- Validate ready: `python ./tools/csk/csk.py validate-ready <module-id> <task-id>`
+- Toolchain probe (module): `python ./tools/csk/csk.py toolchain-probe <module-id>` (or run in module directory: `python ./tools/csk/csk.py toolchain-probe`)
+- Verify: `python ./tools/csk/csk.py verify <task-id> --gates all` from module directory, legacy: `python ./tools/csk/csk.py verify <module-id> <task-id> --gates all`
+- Scope check: `python ./tools/csk/csk.py scope-check <task-id> --slice S-001` from module directory, legacy: `python ./tools/csk/csk.py scope-check <module-id> <task-id> --slice S-001`
+- Validate ready: `python ./tools/csk/csk.py validate-ready <task-id>` from module directory, legacy: `python ./tools/csk/csk.py validate-ready <module-id> <task-id>`
 - Retro: `python ./tools/csk/csk.py retro`
 
 ## Why this matters

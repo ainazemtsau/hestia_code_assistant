@@ -1,0 +1,11 @@
+{
+  "selected_backup": null,
+  "confidence": 0.0,
+  "rationale": "AI assistant must select backup from candidate_table.",
+  "candidate_table": [],
+  "approved_by_human": false,
+  "approved_at": null,
+  "source_url": "https://github.com/ainazemtsau/hestia_code_assistant",
+  "source_ref": "main",
+  "created_at": "2026-02-18T15:01:34Z"
+}
