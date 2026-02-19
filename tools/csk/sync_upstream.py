@@ -1510,14 +1510,39 @@ def _build_migration_adoption_coaching(
             }
         )
 
+    task_count = int(workflow.get("task_count", 0))
+    initiative_count = int(workflow.get("initiative_count", 0))
+    added_delta = sorted(_safe_command_set(command_delta.get("added")))
+    removed_delta = sorted(_safe_command_set(command_delta.get("removed")))
+    extra_delta = sorted(_safe_command_set(command_delta.get("extra")))
+    new_initiative_commands = [cmd for cmd in added_delta if cmd.startswith("initiative-")]
+    has_new_initiative_capability = has_initiative_in_source and new_initiative_commands
+    blockers: list[str] = []
+
+    can_pilot_initiatives = (
+        has_initiative_in_source
+        and has_initiative_deployed
+        and (initiative_count > 0 or bool(has_new_initiative_capability) or task_count > 6)
+    )
+
+    initiative_command_blocked = has_initiative_in_source and not has_initiative_deployed
+    needs_task_artifacts = task_count > 0
+    needs_initiative_artifacts = initiative_count > 0
+    should_validate = needs_task_artifacts or needs_initiative_artifacts or bool(blockers)
+    recommended_profile = "module_first" if task_count >= initiative_count else "mixed"
+
     profiles: list[dict[str, Any]] = []
 
     profiles.append(
         {
             "name": "module_first",
-            "applies_when": "Сейчас приоритет на существующем module-first потоке.",
-            "goal": "Сохранить `new-task` и прогнать только обязательные миграционные артефакты.",
-            "condition": "recommended" if workflow.get("task_count", 0) > 0 else "fallback",
+            "applies_when": (
+                "module tasks present"
+                if needs_task_artifacts
+                else "no module tasks yet"
+            ),
+            "goal": "Сохранить `new-task` и прогнать обязательные миграционные артефакты.",
+            "condition": "recommended" if needs_task_artifacts else "fallback",
             "commands": [
                 "python tools/csk/sync_upstream.py migration-status --migration-strict",
                 "python tools/csk/sync_upstream.py migration-wizard",
@@ -1527,61 +1552,83 @@ def _build_migration_adoption_coaching(
         }
     )
 
+    mixed_commands = [
+        "python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
+        "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
+        "python tools/csk/csk.py initiative-run <I-id> --next --apply",
+        "python tools/csk/csk.py initiative-status <I-id>",
+        "python tools/csk/csk.py reconcile-task-artifacts --strict",
+        "python tools/csk/csk.py validate --all --strict",
+    ]
+    if needs_initiative_artifacts:
+        mixed_commands.insert(5, "python tools/csk/csk.py reconcile-initiative-artifacts --strict")
+
     profiles.append(
         {
             "name": "mixed",
-            "applies_when": "Есть крупные cross-module инициативы, но есть много legacy задач.",
-            "goal": "Включать initiative только для больших сквозных работ.",
-            "condition": "strong_candidate" if workflow.get("task_count", 0) > 0 else "default",
-            "commands": [
-                "python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
-                "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
-                "python tools/csk/csk.py initiative-split <I-id> --mode auto",
-                "python tools/csk/csk.py initiative-run <I-id> --next --apply",
-                "python tools/csk/csk.py initiative-status <I-id>",
-                "python tools/csk/csk.py reconcile-task-artifacts --strict",
-                "python tools/csk/csk.py reconcile-initiative-artifacts --strict",
-                "python tools/csk/csk.py validate --all --strict",
-            ],
+            "applies_when": "Есть cross-module кандидаты, но часть legacy потоков ещё module-first.",
+            "goal": "Включать initiative для крупных сквозных задач.",
+            "condition": "strong_candidate" if task_count > 0 else "default",
+            "commands": mixed_commands,
         }
     )
+
+    initiative_profile_condition = (
+        "available_now"
+        if has_initiative_in_source and has_initiative_deployed
+        else ("blocked_by_command_surface" if has_initiative_in_source else "not_applicable")
+    )
+    initiative_commands = [
+        "python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
+        "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
+        "python tools/csk/csk.py initiative-split <I-id> --mode auto",
+        "python tools/csk/csk.py initiative-run <I-id> --next --apply",
+        "python tools/csk/csk.py initiative-status <I-id> --json",
+        "python tools/csk/csk.py validate --all --strict",
+    ]
+    if needs_initiative_artifacts:
+        initiative_commands.insert(5, "python tools/csk/csk.py reconcile-initiative-artifacts --strict")
 
     profiles.append(
         {
             "name": "initiative_first",
-            "applies_when": "Команда готова перейти на инициативный слой как стандарт.",
-            "goal": "Вести масштабные изменения через initiative orchestration по-умолчанию.",
-            "condition": "available_now" if has_initiative_in_source and has_initiative_deployed
-            else ("blocked_by_command_surface" if has_initiative_in_source else "not_applicable"),
-            "commands": [
-                "python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
-                "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
-                "python tools/csk/csk.py initiative-split <I-id> --mode auto",
-                "python tools/csk/csk.py initiative-run <I-id> --next --apply",
-                "python tools/csk/csk.py initiative-status <I-id> --json",
-                "python tools/csk/csk.py reconcile-initiative-artifacts --strict",
-                "python tools/csk/csk.py validate --all --strict",
-            ],
-            "risk": "initiative-new должен присутствовать в deployed CLI до перехода.",
+            "applies_when": (
+                "Команда готова к инициативному потоку."
+                if can_pilot_initiatives
+                else "Рекомендуется сначала закрыть blockers и закрыть command-surface."
+            ),
+            "goal": "Вести масштабные изменения через initiative orchestration как стандарт.",
+            "condition": initiative_profile_condition,
+            "commands": initiative_commands,
+            "risk": (
+                "initiative-first blocked: deployed CLI still missing initiative-new."
+                if initiative_command_blocked
+                else "initiative-first available."
+            ),
         }
     )
 
-    missing_delta = sorted(_safe_command_set(source_commands) - deployed_commands)
-    extra = sorted(_safe_command_set(command_delta.get("extra")))
-    blockers: list[str] = []
+    missing_delta = sorted(_safe_command_set(source_commands - deployed_commands))
     if missing_delta:
         blockers.append(
             "Command surface still misses expected commands from source: "
             + ", ".join(missing_delta)
         )
-    if command_delta.get("extra"):
+    if extra_delta:
         blockers.append(
             "Source and deployed CLI have extra commands; check if they are intentional overlay changes."
+        )
+    if added_delta:
+        blockers.append(
+            "Migration introduces new CLI commands. Validate command surface first before changing your own automation."
         )
     if has_initiative_in_source and not has_initiative_deployed:
         blockers.append(
             "Source has initiative commands, but deployed CLI lacks initiative-new; do not switch to initiative-first yet."
         )
+    should_validate = bool(
+        needs_task_artifacts or needs_initiative_artifacts or bool(blockers)
+    )
 
     return {
         "pack_transition": {
@@ -1591,26 +1638,56 @@ def _build_migration_adoption_coaching(
             "deployed_has_initiative": has_initiative_deployed,
             "delta_added": sorted(_safe_command_set(command_delta.get("added"))),
             "delta_removed": sorted(_safe_command_set(command_delta.get("removed"))),
-            "delta_extra": extra,
+            "delta_extra": extra_delta,
             "task_count": workflow.get("task_count", 0),
             "initiative_count": workflow.get("initiative_count", 0),
         },
         "new_features": new_features,
-        "recommended_profile": "module_first" if workflow.get("task_count", 0) >= workflow.get("initiative_count", 0) else "mixed",
+        "recommended_profile": recommended_profile,
         "adoption_profiles": profiles,
         "risk_blockers": blockers,
-        "first_steps": [
-            "python tools/csk/sync_upstream.py migration-status --migration-strict",
-            "python tools/csk/sync_upstream.py migration-wizard",
-            "python tools/csk/csk.py reconcile-task-artifacts --strict",
-            "python tools/csk/csk.py reconcile-initiative-artifacts --strict",
-            "python tools/csk/csk.py validate --all --strict",
-        ],
+        "needs_task_artifact_reconcile": needs_task_artifacts,
+        "needs_initiative_artifact_reconcile": needs_initiative_artifacts,
+        "should_validate": should_validate,
+        "summary_note": (
+            f"Pack transition {state_pack} -> {manifest_pack}; "
+            f"{task_count} module tasks, {initiative_count} initiative artifacts."
+        ),
+        "first_steps": list(
+            dict.fromkeys(
+                [
+                    "python tools/csk/sync_upstream.py migration-status --migration-strict",
+                    "python tools/csk/sync_upstream.py migration-wizard",
+                ]
+                + (["python tools/csk/csk.py reconcile-task-artifacts --strict"] if needs_task_artifacts else [])
+                + (
+                    ["python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
+                     "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
+                     "python tools/csk/csk.py initiative-run <I-id> --next --apply"]
+                    if can_pilot_initiatives
+                    else []
+                )
+                + (["python tools/csk/csk.py reconcile-initiative-artifacts --strict"] if needs_initiative_artifacts else [])
+                + (["python tools/csk/csk.py validate --all --strict"] if should_validate else []),
+            )
+        ),
         "ai_prompt_starters": [
-            "Какие 2-3 инициативы уже реально cross-module и их лучше перевести в initiative-first в текущем квартале?",
+            "Какие 2-3 инициативы уже реально cross-module и их лучше перевести в initiative-first в текущем квартале?"
+            if can_pilot_initiatives
+            else "Какие legacy задачи дают наибольший риск и где лучше оставить module-first?",
             "Какие legacy задачи можно оставить module-first без риска и почему?",
             "Какие blockers из command_surface нужно закрыть до того, как ассистент начнет рекомендовать initiative-first flow?",
         ],
+        "transition_overview": {
+            "added_delta": added_delta,
+            "removed_delta": removed_delta,
+            "extra_delta": extra_delta,
+            "recommendation_flags": {
+                "can_pilot_initiatives": can_pilot_initiatives,
+                "initiative_command_blocked": initiative_command_blocked,
+                "has_new_initiative_capability": bool(has_new_initiative_capability),
+            },
+        },
     }
 
 
@@ -1987,12 +2064,18 @@ def _build_post_update_plan(payload: dict[str, Any], migration_status: dict[str,
         if migration_file
         else " --migration-file <migration-report-path>"
     )
+    coaching = payload.get("assistant_coaching", {})
+
     actions = [
         "python tools/csk/sync_upstream.py migration-status --migration-strict",
         "python tools/csk/sync_upstream.py migration-wizard",
-        "python tools/csk/csk.py reconcile-task-artifacts --strict",
-        "python tools/csk/csk.py validate --all --strict",
     ]
+    if coaching.get("needs_task_artifact_reconcile", False):
+        actions.append("python tools/csk/csk.py reconcile-task-artifacts --strict")
+    if coaching.get("needs_initiative_artifact_reconcile", False):
+        actions.append("python tools/csk/csk.py reconcile-initiative-artifacts --strict")
+    if coaching.get("should_validate", False):
+        actions.append("python tools/csk/csk.py validate --all --strict")
 
     if migration_status.get("pending"):
         actions.insert(
@@ -2001,17 +2084,11 @@ def _build_post_update_plan(payload: dict[str, Any], migration_status: dict[str,
             + migration_file_clause,
         )
 
-    if (
-        payload.get("assistant_coaching", {}).get("pack_transition", {}).get("source_has_initiative")
-        and not payload.get("assistant_coaching", {}).get("pack_transition", {}).get("deployed_has_initiative")
-    ):
-        # Legacy-safe sequencing: reconcile task artifacts first, then initiative artifacts,
-        # avoid surfacing half-migrated initiative command recommendations.
-        actions.insert(-1, "python tools/csk/csk.py reconcile-initiative-artifacts --strict")
-
-    coaching = payload.get("assistant_coaching", {})
     if coaching.get("first_steps"):
         actions = list(dict.fromkeys(actions + list(coaching["first_steps"])))
+
+    if coaching.get("summary_note"):
+        actions.insert(0, f"[Transition] {coaching['summary_note']}")
 
     return actions
 
@@ -2098,6 +2175,7 @@ def run_csk_update(
         verify=verify,
         confidence_threshold=confidence_threshold,
         allow_dirty=allow_dirty,
+        run_postchecks=False,
     )
     apply_path = _save_report(root, apply_report)
     session["apply_report"] = str(apply_path)
@@ -2361,6 +2439,7 @@ def run_apply_or_migrate(
     verify: bool,
     confidence_threshold: float,
     allow_dirty: bool,
+    run_postchecks: bool = False,
 ) -> dict[str, Any]:
     if not approve_decision:
         raise SyncError("apply/migrate requires --approve-decision.")
@@ -2415,6 +2494,12 @@ def run_apply_or_migrate(
         "migration_report": None,
         "migration_checklist": None,
         "migration_pending": False,
+        "migration_status": {},
+        "migration_status_report": None,
+        "wizard_report": None,
+        "wizard_markdown": None,
+        "assistant_coaching": {},
+        "next_actions": [],
     }
     migration_steps = _extract_migration_steps(manifest_obj, prior_pack, manifest_pack)
     report["migration_needed"] = bool(migration_steps)
@@ -2771,7 +2856,17 @@ def run_apply_or_migrate(
         migration_file=None if migration_report is None else str(migration_report),
     )
 
-    if report.get("migration_pending"):
+    if run_postchecks:
+        migration_status = run_migration_status(
+            root=root,
+            manifest_path=manifest_path,
+            state_path=state_path,
+            strict=False,
+        )
+        migration_status_path = _save_report(root, migration_status)
+        report["migration_status"] = migration_status
+        report["migration_status_report"] = str(migration_status_path)
+
         wizard = run_migration_wizard(
             root=root,
             manifest_path=manifest_path,
@@ -2779,6 +2874,12 @@ def run_apply_or_migrate(
         )
         report["wizard_report"] = wizard.get("wizard_report")
         report["wizard_markdown"] = wizard.get("wizard_markdown")
+        report["assistant_coaching"] = wizard.get("assistant_coaching", {})
+        report["next_actions"] = _build_post_update_plan(wizard, migration_status)
+        if migration_status.get("pending"):
+            report["conflicts"].append("migration_pending")
+    else:
+        report["next_actions"] = ["Run migration-status and migration-wizard manually after this session"]
 
     # Persist approval snapshot as immutable artifact.
     approved_decision = {
@@ -2847,7 +2948,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-postchecks",
         action="store_true",
-        help="Skip csk-update postchecks (migration-status/migration-wizard/reconcile commands).",
+        help=(
+            "Skip post-update checks after apply/migrate/csk-update "
+            "(migration-status/migration-wizard/reconcile commands)."
+        ),
     )
     parser.add_argument(
         "--decision-file",
@@ -2951,6 +3055,7 @@ def main() -> int:
                 verify=not args.skip_verify,
                 confidence_threshold=args.confidence_threshold,
                 allow_dirty=args.allow_dirty,
+                run_postchecks=not args.skip_postchecks,
             )
         elif mode == "migration-status":
             report = run_migration_status(

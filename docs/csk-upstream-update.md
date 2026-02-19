@@ -57,8 +57,10 @@ Retro workflow evolution is stored separately:
      - `--skip-verify` disables content checks only (`_content_health_check`) and does not bypass preflight.
      - verify failures or fatal exceptions during migration trigger rollback from backup manifest.
 
-   - After successful apply/migrate, run:
+   - By default, successful `apply/migrate` already prints migration wizard and suggested next actions.
+   - If you used `--skip-postchecks`, run manually after a successful apply/migrate:
      - `python tools/csk/sync_upstream.py migration-status --migration-strict`
+     - `python tools/csk/sync_upstream.py migration-wizard`
      - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> --migration-notes \"...\"`
 
 4. `migration-status`

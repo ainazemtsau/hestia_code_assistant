@@ -50,11 +50,12 @@ Pending migration must be acknowledged:
 9. Post-verify failures (and any migration exception) are rolled back from `backup_manifest.json`.
 
 10. After migration apply:
-   - run `migration-status` and only then continue with normal csk workflow.
+   - run `migration-status` (already included in migrate/apply output) and only then continue with normal csk workflow.
    - run `python tools/csk/csk.py reconcile-task-artifacts --strict` (legacy tasks)
    - run `python tools/csk/csk.py reconcile-initiative-artifacts --strict` (legacy initiatives)
 11. `migration-wizard` and finalization:
-   - run `python tools/csk/sync_upstream.py migration-wizard`
+   - if you did not use `--skip-postchecks`, wizard recommendations are already shown in the same command output and logged;
+   - otherwise run `python tools/csk/sync_upstream.py migration-wizard`
    - in wizard output check:
      - `command_surface.command_profile.source_commands`, `deployed_before`, `deployed_after`;
      - `command_surface.command_gaps` (what new functionality is available vs what is still missing for legacy flow);

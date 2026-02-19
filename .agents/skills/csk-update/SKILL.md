@@ -30,9 +30,11 @@ Operator flow (always in this order)
 - Ensure there is no preflight block and no verification errors in command output.
 6) Mandatory migration closure (new):
 - `python tools/csk/sync_upstream.py migration-status --migration-strict`
+  (shown in `csk-update/migrate/apply` output by default; run manually only with `--skip-postchecks`)
 - Run all migration actions from `.csk-app/reports/csk-sync-migration-*.md`
 - Generate rollout guidance for existing module-only flows:
   - `python tools/csk/sync_upstream.py migration-wizard`
+    (shown in output unless `--skip-postchecks` is set)
   - Review `command_surface.command_gaps` in wizard JSON/MD:
     - что из нового pack уже есть в текущем `csk.py`,
     - что еще нужно ввести или явно зафиксировать как "не используется".
