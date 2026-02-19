@@ -4,6 +4,17 @@
 
 Provide deterministic migration steps for CSK updates with AI-assisted backup selection.
 
+### Pack-version-aware migration
+
+`tools/csk/upstream_sync_manifest.json` now carries `pack_version` and per-step migration metadata.
+After `apply`, sync writes:
+- `.csk-app/sync/migrations/<id>.json` (machine-readable migration package)
+- `.csk-app/reports/csk-sync-migration-<stamp>.md` (checklist for operator)
+
+Pending migration must be acknowledged:
+- `python tools/csk/sync_upstream.py migration-status [--migration-strict]`
+- `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> --migration-notes \"...\"`
+
 ## Roles
 
 1. AI assistant (project-local)
@@ -37,6 +48,14 @@ Provide deterministic migration steps for CSK updates with AI-assisted backup se
    - re-run `apply`/`migrate`
 8. `--skip-verify` skips only content checks; preflight must still pass.
 9. Post-verify failures (and any migration exception) are rolled back from `backup_manifest.json`.
+
+10. After migration apply:
+   - run `migration-status` and only then continue with normal csk workflow.
+
+## Module-specific adaptation
+
+The checklist includes scope/compatibility notes for each step.
+If a module does not use a feature, adapt the step to documented scope and keep an explicit decision in the project changelog or migration notes before marking `migration-ack`.
 
 ## First migration bootstrap
 

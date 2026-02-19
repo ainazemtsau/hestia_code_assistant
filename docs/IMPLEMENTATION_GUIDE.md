@@ -103,6 +103,14 @@ This checks:
 - review proof exists and has p0=p1=0
 - if toolchain requires e2e: latest e2e proof passes
 
+## После `csk-update` (обязательный этап)
+- Запустить `python tools/csk/sync_upstream.py migration-status --migration-strict`.
+- Довести все шаги из `csk-sync-migration-*.md`.
+- Подтвердить `migration-ack` для сгенерированного migration отчета.
+- Для уже существующих задач прогнать:
+  - `python tools/csk/csk.py reconcile-task-artifacts --strict`
+- Только после `migration` подтверждения продолжать этапы READY/approve-ready.
+
 ## Retro (learning loop)
 Any deviation is an incident. Incidents are durable.
 `python tools/csk/csk.py retro` writes a retro report with concrete patches.

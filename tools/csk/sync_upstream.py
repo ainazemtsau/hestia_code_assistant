@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ DEFAULT_SOURCE_REF = "main"
 DEFAULT_MANIFEST = "tools/csk/upstream_sync_manifest.json"
 DEFAULT_OVERLAY_ROOT = ".csk-app/overlay"
 DEFAULT_STATE_FILE = ".csk-app/sync/state.json"
+DEFAULT_MIGRATION_DIR = ".csk-app/sync/migrations"
 DEFAULT_CONFIDENCE_THRESHOLD = 0.75
 DEFAULT_TOP_CANDIDATES = 5
 MERGE_MODES = {"replace_core", "overlay_allowed", "manual_only"}
@@ -119,6 +121,182 @@ def _manifest_hash(path: Path) -> str:
     return _hash_bytes(path.read_bytes())
 
 
+def _parse_pack_version(raw: Any) -> tuple[int, ...]:
+    if not isinstance(raw, str):
+        return (0,)
+    nums = [int(x) for x in re.findall(r"\d+", raw)]
+    return tuple(nums) if nums else (0,)
+
+
+def _version_cmp(a: str, b: str) -> int:
+    ta = _parse_pack_version(a)
+    tb = _parse_pack_version(b)
+    if ta == tb:
+        return 0
+    return 1 if ta > tb else -1
+
+
+def _load_manifest_payload(path: Path) -> dict[str, Any]:
+    return _load_json(path)
+
+
+def _manifest_pack_version(manifest: dict[str, Any]) -> str:
+    value = manifest.get("pack_version")
+    if not isinstance(value, str) or not value.strip():
+        return "0.0.0"
+    return value.strip()
+
+
+def _extract_migration_steps(manifest: dict[str, Any], from_version: str, to_version: str) -> list[dict[str, Any]]:
+    raw = manifest.get("migration_steps")
+    if not isinstance(raw, list):
+        return []
+
+    start_ver = _parse_pack_version(from_version)
+    end_ver = _parse_pack_version(to_version)
+    selected: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+
+        introduced = item.get("introduced_in", "0.0.0")
+        item_ver = _parse_pack_version(introduced)
+        if not isinstance(item.get("id"), str) or not item.get("id").strip():
+            continue
+        if not item_ver:
+            continue
+        if item_ver <= end_ver and item_ver > start_ver:
+            selected.append(item)
+    selected.sort(key=lambda x: _parse_pack_version(x.get("introduced_in", "0.0.0")))
+    return selected
+
+
+def _build_migration_id(from_version: str, to_version: str) -> str:
+    clean_from = "".join(ch for ch in from_version if ch.isalnum() or ch in "._-")
+    clean_to = "".join(ch for ch in to_version if ch.isalnum() or ch in "._-")
+    if not clean_from:
+        clean_from = "unversioned"
+    if not clean_to:
+        clean_to = "unknown"
+    return f"migration-{clean_from}-to-{clean_to}-{_now_stamp()}"
+
+
+def _ensure_migration_dir(root: Path) -> Path:
+    out = root / DEFAULT_MIGRATION_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _write_migration_checklist(
+    root: Path,
+    title: str,
+    pack_from: str,
+    pack_to: str,
+    steps: list[dict[str, Any]],
+) -> Path:
+    out = _ensure_report_dir(root)
+    out = out / f"csk-sync-migration-{_now_stamp()}.md"
+    body = [
+        f"# {title}",
+        "",
+        f"Version transition: `{pack_from}` → `{pack_to}`",
+        "",
+        "## Required update actions",
+        "",
+    ]
+    if not steps:
+        body.append("No migration steps are required for this transition.")
+    else:
+        for idx, step in enumerate(steps, start=1):
+            sid = str(step.get("id", f"step-{idx}"))
+            title_ = str(step.get("title", sid))
+            scope = step.get("scope", "global")
+            required = bool(step.get("required", True))
+            req_label = "required" if required else "optional"
+            body.append(f"{idx}. **[{req_label}][{scope}] {title_}** (`{sid}`)")
+            summary = step.get("summary") or step.get("description") or "No summary."
+            body.append(f"   - {summary}")
+            actions = step.get("actions")
+            if isinstance(actions, list) and actions:
+                body.append("   - Actions:")
+                for action in actions:
+                    body.append(f"     - {action}")
+            compatibility = step.get("compatibility")
+            if isinstance(compatibility, list) and compatibility:
+                body.append("   - Compatibility notes:")
+                for note in compatibility:
+                    body.append(f"     - {note}")
+            if step.get("docs"):
+                body.append(f"   - Docs: {step['docs']}")
+    out.write_text("\n".join(body) + "\n", encoding="utf-8")
+    return out
+
+
+def _write_migration_report(
+    root: Path,
+    source_url: str,
+    source_ref: str,
+    source_commit: str,
+    pack_from: str,
+    pack_to: str,
+    migration_notes: str,
+    steps: list[dict[str, Any]],
+) -> tuple[Path, list[dict[str, Any]], Path]:
+    migration_dir = _ensure_migration_dir(root)
+    migration_id = _build_migration_id(pack_from, pack_to)
+    report_path = migration_dir / f"{migration_id}.json"
+    checklist_path = _write_migration_checklist(
+        root=root,
+        title="CSK migration checklist",
+        pack_from=pack_from,
+        pack_to=pack_to,
+        steps=steps,
+    )
+    payload = {
+        "migration_id": migration_id,
+        "pack_from": pack_from,
+        "pack_to": pack_to,
+        "migration_notes": migration_notes,
+        "source_url": source_url,
+        "source_ref": source_ref,
+        "source_commit": source_commit,
+        "generated_at": _iso_now(),
+        "status": "pending",
+        "steps": steps,
+        "steps_count": len(steps),
+        "report_path": str(report_path),
+        "checklist_path": str(checklist_path),
+    }
+    _write_json(report_path, payload)
+    return report_path, steps, checklist_path
+
+
+def _load_migration_status(state: dict[str, Any]) -> tuple[bool, str]:
+    pending = bool(state.get("migration_pending", False))
+    migration_file = state.get("last_migration_file")
+    if not pending:
+        return False, ""
+    if not migration_file:
+        return True, "missing_migration_file"
+    mf = Path(str(migration_file))
+    if not mf.exists():
+        return True, "missing_migration_report"
+    ack = Path(str(mf) + ".ack.json")
+    if not ack.exists():
+        return True, "pending_migration_ack"
+    return False, ""
+
+
+def _resolve_migration_file(root: Path, migration_file: str) -> Path | None:
+    candidate = Path(migration_file)
+    if candidate.is_absolute():
+        if candidate.exists():
+            return candidate
+        return None
+    raw = root / candidate
+    if raw.exists():
+        return raw
+    return None
 def _clone_source(source_url: str, source_ref: str, target: Path) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     clone = _run(["git", "clone", "--depth", "1", "--branch", source_ref, source_url, str(target)])
@@ -774,6 +952,9 @@ def _write_state(
     source_ref: str,
     source_commit: str,
     manifest_hash: str,
+    pack_version: str | None = None,
+    migration_pending: bool | None = None,
+    migration_file: str | None = None,
 ) -> None:
     state = {
         "current_source_url": source_url,
@@ -783,6 +964,12 @@ def _write_state(
         "manifest_hash": manifest_hash,
         "overlay_version": 1,
     }
+    if pack_version is not None:
+        state["current_pack_version"] = pack_version
+    if migration_pending is not None:
+        state["migration_pending"] = migration_pending
+    if migration_file is not None:
+        state["last_migration_file"] = migration_file
     _write_json(state_path, state)
 
 
@@ -798,6 +985,7 @@ def _append_history(
     conflicts: list[str],
     report_path: Path | None,
     decision_path: Path | None,
+    migration_file: Path | None = None,
 ) -> None:
     event = {
         "timestamp": _iso_now(),
@@ -811,8 +999,107 @@ def _append_history(
         "conflicts": conflicts,
         "report_path": None if report_path is None else str(report_path),
         "decision_path": None if decision_path is None else str(decision_path),
+        "migration_file": None if migration_file is None else str(migration_file),
     }
     _append_jsonl(history_path, event)
+
+
+def run_migration_status(root: Path, manifest_path: Path, state_path: Path, strict: bool = False) -> dict[str, Any]:
+    manifest = _load_manifest_payload(manifest_path)
+    manifest_pack = _manifest_pack_version(manifest)
+    state = _load_json_optional(state_path, default={})
+    state_pack = str(state.get("current_pack_version", "0.0.0"))
+    last_migration_file = state.get("last_migration_file")
+
+    report: dict[str, Any] = {
+        "mode": "migration-status",
+        "started_at": _now_stamp(),
+        "pack_version": manifest_pack,
+        "state_pack_version": state_pack,
+        "success": True,
+        "pending": False,
+        "reasons": [],
+        "last_migration_file": last_migration_file,
+    }
+
+    migration_needed = _version_cmp(manifest_pack, state_pack) > 0
+    report["migration_needed"] = migration_needed
+
+    if migration_needed:
+        report["pending"] = True
+        report["reasons"].append("pack_version increased, migration proof is required")
+        steps = _extract_migration_steps(manifest, state_pack, manifest_pack)
+        report["steps_count"] = len(steps)
+        report["step_ids"] = [s.get("id") for s in steps]
+        if steps:
+            if not last_migration_file:
+                report["reasons"].append("missing migration report path in state")
+            else:
+                path = Path(last_migration_file)
+                if not path.exists():
+                    report["reasons"].append("migration report file is missing")
+                else:
+                    ack = path.with_suffix(path.suffix + ".ack.json")
+                    if not ack.exists():
+                        report["reasons"].append("migration report has not been acknowledged")
+                        report["ack_required"] = str(ack)
+    elif state.get("migration_pending", False):
+        report["pending"] = True
+        report["reasons"].append("migration_pending flag is set in state despite up-to-date pack version")
+
+    if strict and report["pending"] and report["reasons"]:
+        report["success"] = False
+
+    report["finished_at"] = _now_stamp()
+    return report
+
+
+def run_migration_ack(
+    root: Path,
+    migration_file: str,
+    state_path: Path,
+    by: str,
+    notes: str,
+) -> dict[str, Any]:
+    if not migration_file:
+        raise SyncError("migration-ack requires --migration-file.")
+    path = _resolve_migration_file(root, migration_file)
+    if path is None:
+        raise SyncError(f"migration file does not exist: {migration_file!r}")
+
+    raw = _load_json(path)
+    if not isinstance(raw, dict):
+        raise SyncError("migration report must be JSON object.")
+
+    state = _load_json_optional(state_path, default={})
+    ack = {
+        "migration_file": str(path),
+        "acknowledged_by": by,
+        "acknowledged_at": _iso_now(),
+        "notes": notes,
+        "migration_id": raw.get("migration_id"),
+    }
+    ack_path = path.with_suffix(path.suffix + ".ack.json")
+    _write_json(ack_path, ack)
+
+    state["migration_pending"] = False
+    state["last_migration_file"] = str(path)
+    state["last_migration_ack_file"] = str(ack_path)
+    state["migration_acknowledged_by"] = by
+    state["migration_acknowledged_at"] = _iso_now()
+    _write_json(state_path, state)
+
+    report: dict[str, Any] = {
+        "mode": "migration-ack",
+        "started_at": _now_stamp(),
+        "migration_file": str(path),
+        "ack_file": str(ack_path),
+        "ack_by": by,
+        "notes": notes,
+        "success": True,
+        "finished_at": _now_stamp(),
+    }
+    return report
 
 
 def run_dry_run(
@@ -822,11 +1109,14 @@ def run_dry_run(
     manifest_path: Path,
 ) -> dict[str, Any]:
     items = _load_manifest(manifest_path)
+    manifest_obj = _load_manifest_payload(manifest_path)
+    manifest_pack = _manifest_pack_version(manifest_obj)
     report: dict[str, Any] = {
         "source_url": source_url,
         "source_ref": source_ref,
         "mode": "dry-run",
         "started_at": _now_stamp(),
+        "pack_version": manifest_pack,
         "results": [],
         "backup_dir": None,
         "verify_errors": [],
@@ -868,8 +1158,11 @@ def run_plan(
     top_candidates: int,
 ) -> dict[str, Any]:
     items = _load_manifest(manifest_path)
+    manifest_obj = _load_manifest_payload(manifest_path)
+    manifest_pack = _manifest_pack_version(manifest_obj)
     dirty_paths = _git_dirty_paths(root, items)
     state = _load_json_optional(state_path, default={})
+    state_pack = str(state.get("current_pack_version", "0.0.0"))
     candidates = _build_backup_candidates(root, items, source_ref)
     decision_template = _write_decision_template(
         root=root,
@@ -882,6 +1175,8 @@ def run_plan(
     report: dict[str, Any] = {
         "source_url": source_url,
         "source_ref": source_ref,
+        "pack_version": manifest_pack,
+        "state_pack_version": state_pack,
         "mode": "plan",
         "started_at": _now_stamp(),
         "state": state,
@@ -897,6 +1192,15 @@ def run_plan(
         report["warnings"].append(
             "Dirty worktree detected on synced paths. apply/migrate will be blocked unless --allow-dirty is set."
         )
+
+    if _version_cmp(manifest_pack, state_pack) > 0:
+        report["warnings"].append(
+            "Manifest pack version is newer than state version. After apply, migration checklist and ack may be required."
+        )
+        migration_steps = _extract_migration_steps(manifest_obj, state_pack, manifest_pack)
+        if migration_steps:
+            report["planned_migration_steps"] = [step.get("id") for step in migration_steps]
+            report["planned_migration_count"] = len(migration_steps)
 
     if not candidates:
         checklist = _write_checklist(
@@ -932,6 +1236,11 @@ def run_apply_or_migrate(
     if not approve_decision:
         raise SyncError("apply/migrate requires --approve-decision.")
 
+    manifest_obj = _load_manifest_payload(manifest_path)
+    manifest_pack = _manifest_pack_version(manifest_obj)
+    prior_state = _load_json_optional(state_path, default={})
+    prior_pack = str(prior_state.get("current_pack_version", "0.0.0"))
+
     items = _load_manifest(manifest_path)
     decision_raw = _validate_decision_file(decision_path)
 
@@ -950,6 +1259,8 @@ def run_apply_or_migrate(
     report: dict[str, Any] = {
         "source_url": source_url,
         "source_ref": source_ref,
+        "pack_version": manifest_pack,
+        "state_pack_version": prior_pack,
         "mode": mode,
         "started_at": _now_stamp(),
         "results": [],
@@ -972,7 +1283,15 @@ def run_apply_or_migrate(
         "checklist": None,
         "conflicts": [],
         "overlay_root": str(overlay_root),
+        "migration_report": None,
+        "migration_checklist": None,
+        "migration_pending": False,
     }
+    migration_steps = _extract_migration_steps(manifest_obj, prior_pack, manifest_pack)
+    report["migration_needed"] = bool(migration_steps)
+    report["migration_step_count"] = len(migration_steps)
+    migration_report: Path | None = None
+    migration_checklist: Path | None = None
     report["rollback"] = {
         "performed": False,
         "manifest": None,
@@ -1007,6 +1326,7 @@ def run_apply_or_migrate(
             report["conflicts"],
             report_path,
             decision_path,
+            migration_report,
         )
         return report
 
@@ -1037,6 +1357,7 @@ def run_apply_or_migrate(
             report["conflicts"],
             report_path,
             decision_path,
+            migration_report,
         )
         return report
 
@@ -1068,6 +1389,7 @@ def run_apply_or_migrate(
             report["conflicts"],
             report_path,
             decision_path,
+            migration_report,
         )
         return report
 
@@ -1123,6 +1445,7 @@ def run_apply_or_migrate(
                 report["conflicts"],
                 report_path,
                 decision_path,
+                migration_report,
             )
             return report
 
@@ -1212,8 +1535,28 @@ def run_apply_or_migrate(
                 report["conflicts"],
                 report_path,
                 decision_path,
+                migration_report,
             )
             return report
+
+    if _version_cmp(manifest_pack, prior_pack) > 0:
+        try:
+            migration_report, _selected_steps, migration_checklist = _write_migration_report(
+                root=root,
+                source_url=source_url,
+                source_ref=source_ref,
+                source_commit=str(report.get("source_commit", "")),
+                pack_from=prior_pack,
+                pack_to=manifest_pack,
+                migration_notes=(manifest_obj.get("migration_notes") or ""),
+                steps=migration_steps,
+            )
+            report["migration_report"] = str(migration_report)
+            report["migration_checklist"] = str(migration_checklist)
+            report["migration_pending"] = bool(migration_steps)
+        except Exception as exc:  # noqa: BLE001
+            report["conflicts"].append(f"Failed to create migration report: {exc}")
+            report["migration_pending"] = False
 
     _write_state(
         state_path=state_path,
@@ -1221,6 +1564,9 @@ def run_apply_or_migrate(
         source_ref=source_ref,
         source_commit=str(report.get("source_commit", "")),
         manifest_hash=_manifest_hash(manifest_path),
+        pack_version=manifest_pack,
+        migration_pending=bool(report.get("migration_pending", False)),
+        migration_file=None if migration_report is None else str(migration_report),
     )
 
     # Persist approval snapshot as immutable artifact.
@@ -1248,12 +1594,13 @@ def run_apply_or_migrate(
         source_url,
         source_ref,
         report.get("source_commit"),
-        str(selected_backup),
+        None if selected_backup is None else str(selected_backup),
         confidence,
         "success",
         [],
         report_path,
         approved_decision_path,
+        migration_report,
     )
     return report
 
@@ -1264,7 +1611,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "mode",
         nargs="?",
         default="dry-run",
-        choices=["dry-run", "plan", "migrate", "apply"],
+        choices=["dry-run", "plan", "migrate", "apply", "migration-status", "migration-ack"],
         help="Execution mode. Default is dry-run.",
     )
     parser.add_argument("--root", default=".", help="Repository root.")
@@ -1285,6 +1632,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--approve-decision",
         action="store_true",
         help="Human approval gate. Required for apply/migrate.",
+    )
+    parser.add_argument(
+        "--migration-file",
+        help="Path to migration report to acknowledge in migration-ack mode.",
+    )
+    parser.add_argument(
+        "--migration-by",
+        default="assistant",
+        help="Identity that acknowledges migration status.",
+    )
+    parser.add_argument(
+        "--migration-notes",
+        default="",
+        help="Notes for migration acknowledgment.",
+    )
+    parser.add_argument(
+        "--migration-strict",
+        action="store_true",
+        help="In migration-status mode, return non-zero code when pending migration is unresolved.",
     )
     parser.add_argument(
         "--overlay-root",
@@ -1361,6 +1727,21 @@ def main() -> int:
                 confidence_threshold=args.confidence_threshold,
                 allow_dirty=args.allow_dirty,
             )
+        elif mode == "migration-status":
+            report = run_migration_status(
+                root=root,
+                manifest_path=manifest_path,
+                state_path=state_path,
+                strict=args.migration_strict,
+            )
+        elif mode == "migration-ack":
+            report = run_migration_ack(
+                root=root,
+                migration_file=args.migration_file,
+                state_path=state_path,
+                by=args.migration_by,
+                notes=args.migration_notes,
+            )
         else:
             raise SyncError(f"Unsupported mode: {mode}")
     except Exception as exc:  # noqa: BLE001
@@ -1383,6 +1764,14 @@ def main() -> int:
         print("[csk-sync] preflight errors:")
         for err in report["preflight_errors"]:
             print(f"- {err}")
+    if report.get("migration_report"):
+        print(f"[csk-sync] migration_report={report['migration_report']}")
+    if report.get("migration_checklist"):
+        print(f"[csk-sync] migration_checklist={report['migration_checklist']}")
+    if report.get("migration_pending"):
+        print("[csk-sync] migration_pending=true")
+    if report.get("ack_file"):
+        print(f"[csk-sync] migration_ack={report['ack_file']}")
     if report.get("rollback"):
         rollback = report["rollback"]
         if rollback.get("performed"):
@@ -1397,6 +1786,11 @@ def main() -> int:
         print("[csk-sync] verification errors:")
         for err in report["verify_errors"]:
             print(f"- {err}")
+        return 1
+    if report.get("mode") == "migration-status" and report.get("pending") and report.get("reasons"):
+        print("[csk-sync] migration status: pending")
+        for reason in report.get("reasons", []):
+            print(f"- {reason}")
         return 1
     if not report.get("success", False):
         return 1

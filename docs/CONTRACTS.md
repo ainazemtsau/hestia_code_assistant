@@ -20,6 +20,9 @@ Contracts (files)
   - scope -> `schemas/scope_proof.schema.json`
   - review -> `schemas/review_proof.schema.json`
   - e2e -> `schemas/e2e_proof.schema.json` (optional)
+- sync migration metadata under `.csk-app/sync/state.json`:
+  - `current_pack_version` and migration report acknowledgement state.
+- migration report artifacts under `.csk-app/sync/migrations/*.json` (durable update instructions)
 
 Log formats (append-only)
 - incidents.jsonl -> `schemas/incident.schema.json`

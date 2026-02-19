@@ -49,6 +49,8 @@ python tools/csk/csk.py validate --json
 - `plan.summary.md` presence + `plan_summary_sha256` hash consistency
 - `user_acceptance.md` presence
 - `approvals/user-check.json` presence + schema + `result=pass` for readiness
+- sync update migration state (`.csk-app/sync/state.json`) and pending migration acknowledgement
+  (`validate-ready`/`approve-ready` now refuse when migration is still pending)
 - incidents/decisions/backlog jsonl structural validity
 
 Note: validation is intentionally conservative; it does not modify files.

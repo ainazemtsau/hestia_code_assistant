@@ -32,6 +32,8 @@ After creating or refreshing plan artifacts, chat output should stay concise:
 For legacy `plan.md` without shareable markers, run:
 - `python tools/csk/csk.py regen-plan-summary <T>`
 - `python tools/csk/csk.py regen-user-acceptance <T>`
+- If migrating an existing project with many tasks, run:
+- `python tools/csk/csk.py reconcile-task-artifacts --module-id <module>`
 
 Recommended chat format after creating task:
 ```

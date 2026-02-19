@@ -23,6 +23,27 @@ Operator flow (always in this order)
 5) Confirm success:
 - Check `.csk-app/reports/csk-sync-*.json` for `"success": true`
 - Ensure there is no preflight block and no verification errors in command output.
+6) Mandatory migration closure (new):
+- `python tools/csk/sync_upstream.py migration-status --migration-strict`
+- Run all migration actions from `.csk-app/reports/csk-sync-migration-*.md`
+- Confirm by:
+  - `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
+- Only then continue normal operations.
+7) Legacy task artifact migration (required for old tasks):
+- `python tools/csk/csk.py reconcile-task-artifacts --require-block --strict`
+
+Required post-update contract (strict):
+- If pack version in manifest is newer than `current_pack_version`, READY is blocked until migration is fully acknowledged.
+- Mandatory execution order for every update:
+  1. `python tools/csk/sync_upstream.py migration-status --migration-strict`
+  2. Close required actions in `csk-sync-migration-*.md`
+  3. `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
+  4. `python tools/csk/csk.py reconcile-task-artifacts --strict` (или по модулю)
+  5. `python tools/csk/csk.py validate --all --strict`
+  6. Только после этого продолжать до `approve-ready`.
+
+Canonical migration reference:
+- `docs/csk-update-changelog.md`
 
 Safety rules
 - Do not skip dry-run.
@@ -43,6 +64,14 @@ Modes
 - `dry-run` (default): compatibility mode, no writes.
 - `plan`: writes decision template + candidate analysis.
 - `migrate` / `apply`: requires approved decision, bootstraps missing overlay paths per manifest item, applies core sync, then overlay reapply.
+- `migration-status`: validates required post-update steps and pending migration state.
+- `migration-ack`: marks migration report as acknowledged.
+- `validate`: runs workflow consistency checks (including migration block status).
+
+If a module cannot use some new feature, this must be explicitly captured in migration notes and module documentation:
+- why the feature is not applicable,
+- what control is used instead,
+- who approved the residual risk before `migration-ack`.
 
 Notes
 - `.agents/skills/csk-update` is part of sync manifest and now self-updates with the orchestrator.

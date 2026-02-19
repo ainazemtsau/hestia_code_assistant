@@ -48,6 +48,8 @@ App context behavior (repo root)
        `python tools/csk/csk.py regen-plan-summary <module> <task>`
      - if user acceptance markers are missing, use:
        `python tools/csk/csk.py regen-user-acceptance <module> <task>`
+     - for old projects with many tasks, run:
+       `python tools/csk/csk.py reconcile-task-artifacts --module-id <module>`
   3) Sync public APIs: `api-sync`
  4) Output a consolidated plan report:
      - what runs in parallel vs sequential

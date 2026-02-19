@@ -6,6 +6,7 @@
 - public_apis/: synced module PUBLIC_API.md copies
 - logs/*.jsonl: decisions/incidents (durable, append-only)
 - backlog.jsonl: deferred work pool (durable)
+- sync/: state/version data for updater (`state.json`, `history.jsonl`, `decisions/`, `migrations/`)
 - run/: runtime state (ignored)
 
 ## Module level: <module>/.csk/

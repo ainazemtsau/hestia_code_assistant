@@ -35,6 +35,9 @@ Retro workflow evolution is stored separately:
      - state: `.csk-app/sync/state.json`
      - history: `.csk-app/sync/history.jsonl`
      - reports: `.csk-app/reports/csk-sync-*.json`
+  - Migration artifacts:
+    - migration report: `.csk-app/sync/migrations/*.json` when pack version changed
+    - migration checklist: `.csk-app/reports/csk-sync-migration-*.md`
    - Runtime preflight happens before any file write:
      - PyYAML is required when any synced SKILL path is present.
      - `python tools/csk/csk.py -h` is checked when manifest covers `tools/csk` paths.
@@ -42,6 +45,18 @@ Retro workflow evolution is stored separately:
    - Post-sync verification is optional:
      - `--skip-verify` disables content checks only (`_content_health_check`) and does not bypass preflight.
      - verify failures or fatal exceptions during migration trigger rollback from backup manifest.
+
+   - After successful apply/migrate, run:
+     - `python tools/csk/sync_upstream.py migration-status --migration-strict`
+     - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> --migration-notes \"...\"`
+
+4. `migration-status`
+   - `python tools/csk/sync_upstream.py migration-status [--migration-strict]`
+
+5. `migration-ack`
+   - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> [--migration-notes ...]`
+   - For legacy tasks from older packs, run:
+     - `python tools/csk/csk.py reconcile-task-artifacts --strict`
 
 ## Decision contract
 
@@ -56,6 +71,17 @@ Decision JSON fields:
 If confidence is low or backup is not selected:
 - updater stops
 - checklist is generated under `.csk-app/reports/`
+
+## Migration contract (pack version)
+- `tools/csk/upstream_sync_manifest.json` contains `pack_version`.
+- `.csk-app/sync/state.json` stores `current_pack_version` + migration metadata.
+- `migration-status` checks:
+  - `python tools/csk/sync_upstream.py migration-status`
+  - `python tools/csk/sync_upstream.py migration-status --migration-strict` returns non-zero for unresolved migration.
+- `migration-ack` stores proof next to migration report:
+  - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <who> --migration-notes \"...\"`
+- Если модуль не использует отдельный шаг миграции, это фиксируется явным решением в `--migration-notes`
+  и документируется в плане модуля (обоснование, контролирующий механизм, кто принял риск).
 
 ## Dirty worktree policy
 

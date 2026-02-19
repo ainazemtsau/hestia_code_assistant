@@ -884,7 +884,7 @@ def cmd_approve_plan(args: argparse.Namespace) -> None:
 def cmd_approve_ready(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     tdir, module_root = task_paths(repo, args.module_id, args.task_id)
-    ready_check = _collect_ready_requirements(tdir, module_root, args.module_id, args.task_id)
+    ready_check = _collect_ready_requirements(repo, tdir, module_root, args.module_id, args.task_id)
     if not ready_check:
         raise SystemExit("READY preconditions failed.")
     approval = {
@@ -1047,7 +1047,14 @@ def _require_user_check_for_ready(tdir: Path, task_id: str, module_id: str, *, e
             raise SystemExit("user-check SHA mismatch. Re-run record-user-check for the current user_acceptance.md.")
 
 
-def _collect_ready_requirements(tdir: Path, module_root: Path, module_id: str, task_id: str) -> Dict[str, Any]:
+def _collect_ready_requirements(
+    repo: Path,
+    tdir: Path,
+    module_root: Path,
+    module_id: str,
+    task_id: str,
+) -> Dict[str, Any]:
+    _require_sync_pack_migration_ready(repo)
     ok_freeze, freeze_viol = validate_freeze(tdir, require_summary_hash=True)
     if not ok_freeze:
         raise SystemExit("Plan freeze invalid: " + "; ".join(freeze_viol))
@@ -1330,7 +1337,7 @@ def cmd_record_review(args: argparse.Namespace) -> None:
 def cmd_validate_ready(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     tdir, module_root = task_paths(repo, args.module_id, args.task_id)
-    req = _collect_ready_requirements(tdir, module_root, args.module_id, args.task_id)
+    req = _collect_ready_requirements(repo, tdir, module_root, args.module_id, args.task_id)
 
     # write a ready report in run/
     out = tdir / "run" / "ready.json"
@@ -1921,6 +1928,105 @@ def _validate_jsonl(path: Path, required_keys: List[str], enums: Dict[str, List[
                 errors.append(f"{path}: line {idx} invalid {k}={obj.get(k)}")
     return errors, warnings
 
+
+def _parse_version_str(value: str) -> tuple[int, ...]:
+    nums = [int(x) for x in re.findall(r"\d+", value)]
+    return tuple(nums) if nums else (0,)
+
+
+def _version_cmp(a: str, b: str) -> int:
+    pa = _parse_version_str(a)
+    pb = _parse_version_str(b)
+    if pa == pb:
+        return 0
+    return 1 if pa > pb else -1
+
+
+def _validate_sync_pack_migration(repo: Path, strict: bool) -> tuple[List[str], List[str]]:
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    manifest_path = repo / "tools/csk" / "upstream_sync_manifest.json"
+    state_path = repo / ".csk-app" / "sync" / "state.json"
+    if not manifest_path.exists():
+        warnings.append("missing tools/csk/upstream_sync_manifest.json; migration-state validation skipped.")
+        return errors, warnings
+
+    manifest = load_json(manifest_path, default={})
+    manifest_pack = manifest.get("pack_version")
+    if not isinstance(manifest_pack, str) or not manifest_pack.strip():
+        warnings.append("upstream_sync_manifest.json missing pack_version; migration strict checks unavailable.")
+        return errors, warnings
+
+    state = load_json(state_path, default={})
+    state_pack = state.get("current_pack_version")
+    if not isinstance(state_pack, str) or not state_pack.strip():
+        msg = "sync state missing current_pack_version; run sync_upstream plan/apply after migration update."
+        if strict:
+            errors.append(msg)
+        else:
+            warnings.append(msg)
+        return errors, warnings
+
+    if _version_cmp(manifest_pack, state_pack) <= 0:
+        return errors, warnings
+
+    if not state.get("migration_pending", False):
+        msg = (
+            f"sync pack is behind manifest: state={state_pack}, manifest={manifest_pack}, "
+            "migration_pending=false but upgrade exists."
+        )
+        if strict:
+            errors.append(msg)
+        else:
+            warnings.append(msg)
+        return errors, warnings
+
+    migration_file = state.get("last_migration_file")
+    if not isinstance(migration_file, str) or not migration_file.strip():
+        msg = "state indicates pending migration but no migration report path."
+        warnings.append(msg if not strict else f"{msg} Run migration-status then migration-ack.")
+        return errors, warnings
+
+    migration_path = Path(migration_file)
+    if not migration_path.exists():
+        msg = f"migration file missing on disk: {migration_path}"
+        if strict:
+            errors.append(msg)
+        else:
+            warnings.append(msg)
+        return errors, warnings
+
+    migration_ack = Path(str(migration_path) + ".ack.json")
+    if not migration_ack.exists():
+        msg = (
+            f"migration report is unacknowledged: {migration_path}. "
+            f"Run migration-ack --migration-file {migration_path}"
+        )
+        if strict:
+            errors.append(msg)
+        else:
+            warnings.append(msg)
+    return errors, warnings
+
+
+def _require_sync_pack_migration_ready(repo: Path) -> None:
+    manifest_path = repo / "tools" / "csk" / "upstream_sync_manifest.json"
+    if not manifest_path.exists():
+        return
+
+    errors, warnings = _validate_sync_pack_migration(repo, strict=True)
+    issues: List[str] = []
+    issues.extend(errors)
+    issues.extend(warnings)
+    if issues:
+        raise SystemExit(
+            "CSK workflow pack migration is required before READY. "
+            "Run `python tools/csk/sync_upstream.py migration-status --migration-strict` "
+            "and acknowledge with migration-ack. "
+            + "; ".join(issues)
+        )
+
 def cmd_validate(args: argparse.Namespace) -> None:
     """
     Validate CSK contracts in-repo. Intended to catch manual edits early.
@@ -1956,6 +2062,10 @@ def cmd_validate(args: argparse.Namespace) -> None:
         e, w = _validate_jsonl(repo/".csk-app"/"backlog.jsonl",
                                required_keys=["id","created_utc","title","status"])
         errors += e; warnings += w
+
+    e, w = _validate_sync_pack_migration(repo, args.strict)
+    errors += e
+    warnings += w
 
     # module validation
     modules = reg.get("modules") or []
@@ -2122,6 +2232,114 @@ def cmd_validate(args: argparse.Namespace) -> None:
 
     if errors:
         sys.exit(1)
+
+
+def _iter_reconcilable_tasks(
+    repo: Path,
+    module_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+) -> list[tuple[str, Path]]:
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    modules = reg.get("modules", [])
+    if not isinstance(modules, list):
+        modules = []
+    if module_id:
+        target_module = get_module(repo, module_id)
+        modules = [target_module] if target_module else []
+
+    out: list[tuple[str, Path]] = []
+    for m in modules:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id")
+        if not isinstance(mid, str):
+            continue
+        mroot = repo / m.get("path", "")
+        if not mroot.exists():
+            continue
+        tasks_dir = mroot / ".csk" / "tasks"
+        if not tasks_dir.exists():
+            continue
+        for tdir in sorted(tasks_dir.iterdir()):
+            if not tdir.is_dir() or not tdir.name.startswith("T-"):
+                continue
+            if task_id and tdir.name != task_id:
+                continue
+            out.append((mid, tdir))
+    return out
+
+
+def cmd_reconcile_task_artifacts(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    tasks = _iter_reconcilable_tasks(repo, args.module_id, args.task_id)
+    if not tasks:
+        raise SystemExit("No matching tasks found for artifact reconciliation.")
+
+    report = {
+        "updated": 0,
+        "missing_plan": 0,
+        "errors": 0,
+        "items": [],
+    }
+
+    for mid, tdir in tasks:
+        item: dict[str, Any] = {"module": mid, "task": tdir.name}
+        plan_path = tdir / "plan.md"
+        if not plan_path.exists():
+            report["missing_plan"] += 1
+            item["status"] = "missing_plan"
+            item["error"] = "plan.md missing"
+            report["items"].append(item)
+            continue
+
+        title = task_title(tdir, tdir.name)
+        try:
+            sync_plan_summary(
+                repo,
+                plan_path,
+                tdir / "plan.summary.md",
+                mid,
+                tdir.name,
+                title,
+                require_block=bool(args.require_block),
+            )
+            sync_user_acceptance(
+                repo,
+                plan_path,
+                tdir / "user_acceptance.md",
+                mid,
+                tdir.name,
+                title,
+                require_block=bool(args.require_block),
+            )
+            report["updated"] += 1
+            item["status"] = "updated"
+        except SystemExit as e:
+            report["errors"] += 1
+            item["status"] = "error"
+            item["error"] = str(e)
+        report["items"].append(item)
+
+    if args.json:
+        report["status"] = "ok" if report["errors"] == 0 else "failed"
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if report["errors"] and args.strict:
+            raise SystemExit("reconcile-task-artifacts failed.")
+        return
+
+    print(
+        f"[csk] reconcile-task-artifacts updated={report['updated']} "
+        f"missing_plan={report['missing_plan']} errors={report['errors']}"
+    )
+    if report["errors"]:
+        for item in report["items"]:
+            if item.get("status") == "error":
+                print(f"[csk] {item['module']}/{item['task']}: {item.get('error')}")
+        if args.strict:
+            raise SystemExit("reconcile-task-artifacts failed.")
+    print(f"[csk] reconcile-task-artifacts completed for {len(report['items'])} tasks.")
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="csk", description="CSK‑M Pro v4 helper")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -2175,6 +2393,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp.add_argument("--module-id", default=None, dest="module_id", help="Explicit module id override.")
     sp.add_argument("--require-block", action="store_true")
     sp.set_defaults(fn=cmd_regen_user_acceptance, module_mode="module_task")
+
+    sp = sub.add_parser("reconcile-task-artifacts")
+    sp.add_argument("--module-id", default=None, help="Limit to one module.")
+    sp.add_argument("task_id", nargs="?")
+    sp.add_argument("--require-block", action="store_true", help="Fail if marker blocks are missing in plan.md.")
+    sp.add_argument("--strict", action="store_true", help="Return non-zero if any task has missing blocks.")
+    sp.add_argument("--json", action="store_true", help="Output JSON report.")
+    sp.set_defaults(fn=cmd_reconcile_task_artifacts)
 
     sp = sub.add_parser("scope-check")
     sp.add_argument("module_or_task_id")
