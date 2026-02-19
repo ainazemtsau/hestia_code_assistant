@@ -12,6 +12,9 @@ Contracts (files)
 - `<module>/.csk/toolchain.json` -> `schemas/toolchain.schema.json`
 - `<module>/.csk/tasks/<task>/slices.json` -> `schemas/slices.schema.json`
 - `<module>/.csk/tasks/<task>/plan.freeze.json` -> `schemas/plan_freeze.schema.json`
+- `.csk-app/initiatives/<I-id>/initiative.plan.json` -> `schemas/initiative_plan.schema.json`
+- `.csk-app/initiatives/<I-id>/initiative.status.json` -> `schemas/initiative_status.schema.json`
+- `.csk-app/initiatives/<I-id>/approvals/initiative-plan-approve.json` -> durable proof artifact (manual migration/approval notes; no dedicated JSON schema yet)
 - `<module>/.csk/tasks/<task>/plan.summary.md` -> human-readable short-plan artifact (shareable summary)
 - `<module>/.csk/tasks/<task>/user_acceptance.md` -> manual acceptance contract (machine-generated from plan USER_ACCEPTANCE block)
 - `<module>/.csk/tasks/<task>/approvals/user-check.json` -> `schemas/user_check.schema.json`

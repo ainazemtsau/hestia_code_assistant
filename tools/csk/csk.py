@@ -157,6 +157,131 @@ PLAN_SUMMARY_END = "<!-- PLAN_SUMMARY_END -->"
 USER_ACCEPTANCE_START = "<!-- USER_ACCEPTANCE_START -->"
 USER_ACCEPTANCE_END = "<!-- USER_ACCEPTANCE_END -->"
 
+INITIATIVE_PROFILE_PATH = ".csk-app/initiatives/process.profile.json"
+INITIATIVE_SCHEMA_VERSION = 1
+INITIATIVE_STATUS_VALUES = {"draft", "approved", "active", "done", "blocked"}
+MILESTONE_STATUS_VALUES = {"planned", "active", "done", "blocked", "skipped"}
+PARTICIPATION_VALUES = {"active", "not_applicable"}
+ROLE_VALUES = {"owner", "consumer", "shared", "support", "not_applicable"}
+
+
+def _default_initiative_profile() -> Dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "default_profile": "default",
+        "profiles": {
+            "default": {
+                "name": "default",
+                "max_active_milestones": 1,
+                "spawn_mode": "serial",
+                "milestones_per_iteration": 1,
+                "gates": [
+                    "record-review",
+                    "record-user-check",
+                    "validate-ready",
+                    "approve-ready",
+                ],
+                "module_task_naming": "{initiative_id}/{milestone_id}/{module_id}",
+                "auto_spawn": False,
+                "default_review_gates": ["record-review", "record-user-check", "validate-ready", "approve-ready"],
+            }
+        },
+    }
+
+
+def _ensure_initiative_profile_file(repo: Path) -> None:
+    path = repo / INITIATIVE_PROFILE_PATH
+    if path.exists():
+        return
+    atomic_write_json(path, _default_initiative_profile())
+
+
+def _load_initiative_profile(repo: Path) -> Dict[str, Any]:
+    _ensure_initiative_profile_file(repo)
+    raw = load_json(repo / INITIATIVE_PROFILE_PATH, default=_default_initiative_profile())
+    if not isinstance(raw, dict):
+        return _default_initiative_profile()
+    return raw
+
+
+def _initiative_profile_for_plan(profile_id: Optional[str], profile_obj: Dict[str, Any]) -> Dict[str, Any]:
+    profile_id = profile_id or profile_obj.get("default_profile") or "default"
+    profiles = profile_obj.get("profiles", {}) if isinstance(profile_obj, dict) else {}
+    if not isinstance(profiles, dict):
+        profiles = {}
+    profile = profiles.get(profile_id)
+    if not isinstance(profile, dict):
+        profile = profiles.get("default", {})
+    if not isinstance(profile, dict):
+        profile = {}
+    base = _default_initiative_profile().get("profiles", {}).get("default", {}).copy()
+    merged = base.copy()
+    merged.update(profile)
+    merged["name"] = profile_id
+    return merged
+
+
+def _initiative_root(repo: Path) -> Path:
+    return repo / ".csk-app" / "initiatives"
+
+
+def _ensure_initiative_root(repo: Path) -> None:
+    _initiative_root(repo).mkdir(parents=True, exist_ok=True)
+
+
+def _next_initiative_id(root: Path) -> str:
+    nums = []
+    if root.exists():
+        for p in root.iterdir():
+            if not p.is_dir():
+                continue
+            m = re.match(r"^I-(\d+)$", p.name)
+            if m:
+                nums.append(int(m.group(1)))
+    return f"I-{(max(nums) + 1 if nums else 1):03d}"
+
+
+def _initiative_paths_for_module_id(repo: Path, module_id: str) -> List[Tuple[str, Path]]:
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    modules = reg.get("modules", []) if isinstance(reg, dict) else []
+    out = []
+    for m in modules:
+        if not isinstance(m, dict):
+            continue
+        mid = str(m.get("id", "")).strip()
+        rel = m.get("path")
+        if not mid or mid != module_id or not isinstance(rel, str):
+            continue
+        out.append((mid, repo / rel))
+    return out
+
+
+def _initiative_template_text(repo: Path, name: str) -> str:
+    return (repo / "templates" / "initiative" / name).read_text(encoding="utf-8")
+
+
+def _parse_initiative_id(raw: str) -> str:
+    raw = raw.strip()
+    return raw if raw else _safe_initiative_id("I-1")
+
+
+def _safe_initiative_id(raw: str) -> str:
+    raw = (raw or "").strip()
+    if re.match(r"^I-\d+$", raw):
+        return raw
+    if re.match(r"^\d+$", raw):
+        return f"I-{int(raw):03d}"
+    raise SystemExit(f"Invalid initiative id: {raw}")
+
+
+def _safe_milestone_id(raw: str) -> str:
+    raw = (raw or "").strip()
+    if re.match(r"^M-\d+$", raw):
+        return raw
+    if re.match(r"^\d+$", raw):
+        return f"M-{int(raw):03d}"
+    raise SystemExit(f"Invalid milestone id: {raw}")
+
 
 def extract_plan_summary_block(plan_text: str) -> Optional[str]:
     m = re.search(
@@ -553,6 +678,9 @@ def ensure_app_skeleton(repo: Path) -> None:
         if not p.exists():
             atomic_write_text(p, "")
 
+    # Shared profile for app-level initiative orchestration (can be overridden per initiative).
+    _ensure_initiative_profile_file(repo)
+
     digest = app / "digest.md"
     if not digest.exists():
         atomic_write_text(digest, f"# App digest (CSK‑M Pro v2)\n\n- Project: {repo.name}\n- Created: {utc_now_iso()}\n")
@@ -688,6 +816,77 @@ def next_task_id(tasks_dir: Path) -> str:
     n = max(nums) + 1 if nums else 1
     return f"T-{n:04d}"
 
+
+def _create_module_task(
+    repo: Path,
+    module_id: str,
+    title: str,
+    task_id: Optional[str] = None,
+    *,
+    initiative_id: Optional[str] = None,
+    initiative_milestone: Optional[str] = None,
+) -> Tuple[str, Path]:
+    m = get_module(repo, module_id)
+    module_root = repo / m["path"]
+    ensure_module_kernel(repo, m["id"], module_root)
+
+    tasks_dir = module_root / ".csk" / "tasks"
+    tid = task_id or next_task_id(tasks_dir)
+    tdir = tasks_dir / tid
+    tdir.mkdir(parents=True, exist_ok=True)
+    (tdir / "approvals").mkdir(exist_ok=True)
+    (tdir / "run").mkdir(exist_ok=True)
+    (tdir / "run" / "proofs").mkdir(exist_ok=True)
+
+    plan_tpl = (repo / "templates" / "task" / "plan.md").read_text(encoding="utf-8")
+    plan_text = plan_tpl.replace("<module>", m["id"]).replace("<T-id>", tid).replace("<title>", title)
+    atomic_write_text(tdir / "plan.md", plan_text)
+    sync_plan_summary(
+        repo,
+        tdir / "plan.md",
+        tdir / "plan.summary.md",
+        m["id"],
+        tid,
+        title,
+        require_block=True,
+    )
+    sync_user_acceptance(
+        repo,
+        tdir / "plan.md",
+        tdir / "user_acceptance.md",
+        m["id"],
+        tid,
+        title,
+        require_block=False,
+    )
+
+    slices_tpl = load_json(repo / "templates" / "task" / "slices.json")
+    if not isinstance(slices_tpl, dict):
+        raise SystemExit("Invalid task template: templates/task/slices.json")
+    slices_tpl["task_id"] = tid
+    slices_tpl["module"] = m["id"]
+    atomic_write_json(tdir / "slices.json", slices_tpl)
+
+    status_payload = {
+        "task_id": tid,
+        "module": m["id"],
+        "title": title,
+        "created_utc": utc_now_iso(),
+        "phase": "planning",
+        "plan_frozen": False,
+        "plan_approved": False,
+        "ready_approved": False,
+        "active_slice": None,
+        "slice_attempts": {},
+    }
+    if initiative_id:
+        status_payload["initiative_id"] = initiative_id
+    if initiative_milestone:
+        status_payload["initiative_milestone"] = initiative_milestone
+    atomic_write_json(tdir / "run" / "status.json", status_payload)
+    return tid, tdir
+
+
 def get_module(repo: Path, module_id: str) -> Dict[str, Any]:
     reg = load_json(repo / ".csk-app" / "registry.json")
     module_id = slugify(module_id)
@@ -721,58 +920,12 @@ def task_title(tdir: Path, task_id: str) -> str:
 def cmd_new_task(args: argparse.Namespace) -> None:
     repo = find_repo_root(Path.cwd())
     ensure_app_skeleton(repo)
-    m = get_module(repo, args.module_id)
-    module_root = repo / m["path"]
-    ensure_module_kernel(repo, m["id"], module_root)
-
-    tasks_dir = module_root / ".csk" / "tasks"
-    tid = next_task_id(tasks_dir)
-    tdir = tasks_dir / tid
-    tdir.mkdir(parents=True, exist_ok=True)
-    (tdir / "approvals").mkdir(exist_ok=True)
-    (tdir / "run").mkdir(exist_ok=True)
-    (tdir / "run" / "proofs").mkdir(exist_ok=True)
-
-    plan_tpl = (repo / "templates" / "task" / "plan.md").read_text(encoding="utf-8")
-    plan_text = plan_tpl.replace("<module>", m["id"]).replace("<T-id>", tid).replace("<title>", args.title)
-    atomic_write_text(tdir / "plan.md", plan_text)
-    sync_plan_summary(
+    tid, tdir = _create_module_task(
         repo,
-        tdir / "plan.md",
-        tdir / "plan.summary.md",
-        m["id"],
-        tid,
+        args.module_id,
         args.title,
-        require_block=True,
     )
-    sync_user_acceptance(
-        repo,
-        tdir / "plan.md",
-        tdir / "user_acceptance.md",
-        m["id"],
-        tid,
-        args.title,
-        require_block=False,
-    )
-    slices_tpl = load_json(repo / "templates" / "task" / "slices.json")
-    slices_tpl["task_id"] = tid
-    slices_tpl["module"] = m["id"]
-    atomic_write_json(tdir / "slices.json", slices_tpl)
-
-    # runtime status (ignored)
-    atomic_write_json(tdir / "run" / "status.json", {
-        "task_id": tid,
-        "module": m["id"],
-        "title": args.title,
-        "created_utc": utc_now_iso(),
-        "phase": "planning",
-        "plan_frozen": False,
-        "plan_approved": False,
-        "ready_approved": False,
-        "active_slice": None,
-        "slice_attempts": {}
-    })
-    print(f"[csk] new task: {m['id']}/{tid}")
+    print(f"[csk] new task: {args.module_id}/{tid}")
     print(f"[csk] plan.md: {tdir / 'plan.md'}")
     print(f"[csk] plan.summary.md: {tdir / 'plan.summary.md'}")
     print(f"[csk] user_acceptance.md: {tdir / 'user_acceptance.md'}")
@@ -958,6 +1111,656 @@ def cmd_regen_user_acceptance(args: argparse.Namespace) -> None:
         require_block=args.require_block,
     )
     print(f"[csk] regenerated user acceptance checklist: {acceptance_path}")
+
+
+def _initiative_dir(repo: Path, initiative_id: str) -> Path:
+    return _initiative_root(repo) / _safe_initiative_id(initiative_id)
+
+
+def _initiative_plan_path(initiative_id: str, root: Path) -> Path:
+    return _initiative_dir(Path(root), initiative_id) / "initiative.plan.json"
+
+
+def _initiative_summary_path(initiative_id: str, root: Path) -> Path:
+    return _initiative_dir(Path(root), initiative_id) / "initiative.summary.md"
+
+
+def _initiative_status_path(initiative_id: str, root: Path) -> Path:
+    return _initiative_dir(Path(root), initiative_id) / "initiative.status.json"
+
+
+def _initiative_approvals_dir(root: Path, initiative_id: str) -> Path:
+    p = _initiative_dir(root, initiative_id) / "approvals"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _initiative_reports_dir(root: Path, initiative_id: str) -> Path:
+    p = _initiative_dir(root, initiative_id) / "reports"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _load_initiative_plan(repo: Path, initiative_id: str) -> Tuple[Dict[str, Any], Path]:
+    iroot = _initiative_dir(repo, initiative_id)
+    plan_path = iroot / "initiative.plan.json"
+    obj = load_json(plan_path, default=None)
+    if not isinstance(obj, dict):
+        raise SystemExit(f"Initiative plan is not a valid JSON object: {plan_path}")
+    return obj, iroot
+
+
+def _load_initiative_status(repo: Path, initiative_id: str) -> Dict[str, Any]:
+    return load_json(_initiative_status_path(initiative_id, repo), default={})
+
+
+def _normalize_id(raw: str) -> str:
+    return str(raw or "").strip()
+
+
+def _next_milestone_id(plan: Dict[str, Any]) -> str:
+    nums = []
+    for m in plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("milestone_id")
+        if isinstance(mid, str):
+            z = re.match(r"^M-(\d+)$", mid.strip())
+            if z:
+                nums.append(int(z.group(1)))
+    n = max(nums) + 1 if nums else 1
+    return f"M-{n:03d}"
+
+
+def _next_milestone_id_from_items(milestones: List[Dict[str, Any]]) -> str:
+    return _next_milestone_id({"milestones": milestones})
+
+
+def _normalize_milestone_status(raw: str) -> str:
+    raw = _normalize_id(raw)
+    if raw in MILESTONE_STATUS_VALUES:
+        return raw
+    return "planned"
+
+
+def _normalize_milestone_effort(raw: Any) -> int:
+    if isinstance(raw, bool):
+        return 0
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.isdigit():
+            return int(s)
+    return 0
+
+
+def _normalize_milestone_participation(raw: str) -> str:
+    raw = _normalize_id(raw)
+    if raw in PARTICIPATION_VALUES:
+        return raw
+    return "active"
+
+
+def _normalize_milestone_role(raw: str) -> str:
+    raw = _normalize_id(raw)
+    if raw in ROLE_VALUES:
+        return raw
+    return "shared"
+
+
+def _ensure_initiative_paths(initiative_id: str, root: Path) -> Path:
+    iroot = _initiative_dir(root, initiative_id)
+    iroot.mkdir(parents=True, exist_ok=True)
+    _initiative_approvals_dir(root, initiative_id)
+    _initiative_reports_dir(root, initiative_id)
+    return iroot
+
+
+def _initiative_status_from_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
+    milestones = []
+    total = 0
+    for m in plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []:
+        if not isinstance(m, dict):
+            continue
+        mid = _normalize_id(m.get("milestone_id"))
+        mstatus = _normalize_milestone_status(m.get("status"))
+        module_items = m.get("module_items", []) if isinstance(m.get("module_items"), list) else []
+        active_modules = [
+            str(item.get("module_id"))
+            for item in module_items
+            if isinstance(item, dict) and str(item.get("participation", "active")).strip() == "active"
+        ]
+        total += len(active_modules)
+        milestones.append({
+            "milestone_id": mid or "<unknown>",
+            "status": mstatus,
+            "active_modules": len(active_modules),
+            "module_items": len(module_items),
+            "module_task_links": sum(
+                len(item.get("module_task_ids", []) or [])
+                for item in module_items
+                if isinstance(item, dict)
+            ),
+        })
+    return {
+        "initiative_id": plan.get("initiative_id"),
+        "updated_utc": utc_now_iso(),
+        "status": plan.get("status", "draft"),
+        "milestones": milestones,
+        "totals": {
+            "milestones": len(milestones),
+            "module_items": sum(m.get("module_items", 0) for m in milestones),
+            "module_tasks": sum(m.get("module_task_links", 0) for m in milestones),
+            "active_modules_all": total,
+        },
+        "evidence": None,
+    }
+
+
+def _write_initiative_status(root: Path, initiative_id: str, plan: Dict[str, Any]) -> Dict[str, Any]:
+    status = _initiative_status_from_plan(plan)
+    atomic_write_json(_initiative_status_path(initiative_id, root), status)
+    return status
+
+
+def _initiative_build_task_title(
+    pattern: str,
+    initiative_id: str,
+    milestone_id: str,
+    module_id: str,
+    initiative_title: str,
+    milestone_title: str,
+) -> str:
+    mapping = {
+        "initiative_id": initiative_id,
+        "milestone_id": milestone_id,
+        "module_id": module_id,
+        "initiative_title": initiative_title,
+        "title": initiative_title,
+        "milestone_title": milestone_title,
+    }
+    try:
+        return pattern.format(**mapping)
+    except Exception:
+        return f"{initiative_id} / {milestone_id} / {module_id} / {initiative_title}"
+
+
+def _load_registry_modules(repo: Path) -> List[Tuple[str, Path]]:
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    modules = reg.get("modules", [])
+    out: List[Tuple[str, Path]] = []
+    for m in modules:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id")
+        rel = m.get("path")
+        if isinstance(mid, str) and isinstance(rel, str):
+            out.append((mid, repo / rel))
+    return out
+
+
+def cmd_initiative_new(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    _ensure_initiative_root(repo)
+
+    initiative_root = _initiative_root(repo)
+    iid = _next_initiative_id(initiative_root)
+    iroot = _ensure_initiative_paths(iid, repo)
+    profile_obj = _load_initiative_profile(repo)
+    profile_name = _normalize_id(args.profile or profile_obj.get("default_profile") or "default")
+    milestones = []
+    for raw_m in args.initial_milestones:
+        payload = _parse_milestone_payload(raw_m)
+        payload["milestone_id"] = payload.get("milestone_id") or _next_milestone_id_from_items(milestones)
+        milestones.append(_normalize_milestone_payload(iid, payload))
+
+    plan = {
+        "schema_version": INITIATIVE_SCHEMA_VERSION,
+        "initiative_id": iid,
+        "title": args.title,
+        "goal": args.goal or "",
+        "owner": args.owner or "",
+        "created_utc": utc_now_iso(),
+        "status": "draft",
+        "default_profile": profile_name,
+        "workflow_profile": profile_name,
+        "milestones": milestones,
+    }
+
+    template = _initiative_template_text(repo, "initiative.md")
+    tpl_summary = _initiative_template_text(repo, "initiative.summary.md")
+    atomic_write_text(
+        iroot / "initiative.md",
+        template
+        .replace("<I-id>", iid)
+        .replace("<title>", args.title)
+        .replace("<goal>", plan["goal"])
+        .replace("<owner>", plan["owner"] or "")
+    )
+    atomic_write_json(iroot / "initiative.plan.json", plan)
+    atomic_write_text(_initiative_summary_path(iid, repo), tpl_summary.replace("<I-id>", iid).replace("<title>", args.title))
+    status = _write_initiative_status(repo, iid, plan)
+    _initiative_approvals_dir(repo, iid)
+
+    print(f"[csk] initiative created: {iid}")
+    print(f"[csk] initiative.plan.json: {iroot / 'initiative.plan.json'}")
+    print(f"[csk] initiative.summary.md: {iroot / 'initiative.summary.md'}")
+    print(f"[csk] initiative.status.json: {iroot / 'initiative.status.json'}")
+    print(f"[csk] status: {status.get('status')}")
+
+
+def _parse_milestone_payload(raw: str) -> Dict[str, Any]:
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    return {"title": raw}
+
+
+def _normalize_milestone_payload(plan_id: str, milestone: Dict[str, Any]) -> Dict[str, Any]:
+    title = milestone.get("title") or f"Milestone for {plan_id}"
+    deps = milestone.get("depends_on") or []
+    if isinstance(deps, list):
+        depends = []
+        for d in deps:
+            if isinstance(d, str):
+                depends.append(d.strip())
+    else:
+        depends = []
+    module_items = []
+    raw_items = milestone.get("module_items")
+    if isinstance(raw_items, list):
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            module_id = _normalize_id(item.get("module_id"))
+            if not module_id:
+                continue
+            role = _normalize_milestone_role(item.get("role", "shared"))
+            participation = _normalize_milestone_participation(item.get("participation", "active"))
+            module_items.append({
+                "module_id": module_id,
+                "role": role,
+                "participation": participation,
+                "module_task_ids": item.get("module_task_ids") if isinstance(item.get("module_task_ids"), list) else [],
+                "reason_if_not_applicable": _normalize_id(item.get("reason_if_not_applicable")) if participation == "not_applicable" else "",
+            })
+    return {
+        "milestone_id": _safe_milestone_id(milestone.get("milestone_id") or _next_milestone_id_from_items([])),
+        "title": title,
+        "goal": _normalize_id(milestone.get("goal") or ""),
+        "acceptance": _normalize_id(milestone.get("acceptance") or ""),
+        "estimated_effort": _normalize_milestone_effort(milestone.get("estimated_effort")),
+        "depends_on": depends,
+        "status": _normalize_milestone_status(milestone.get("status") or "planned"),
+        "module_items": module_items,
+        "reason_if_not_applicable": _normalize_id(milestone.get("reason_if_not_applicable") or ""),
+    }
+
+
+def cmd_initiative_edit(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    iroot = _initiative_dir(repo, args.initiative_id)
+    if not iroot.exists():
+        raise SystemExit(f"Initiative not found: {args.initiative_id}")
+    plan_path = iroot / "initiative.plan.json"
+    plan = load_json(plan_path, default=None)
+    if not isinstance(plan, dict):
+        raise SystemExit(f"Invalid initiative plan: {plan_path}")
+
+    if args.title is not None:
+        plan["title"] = args.title
+    if args.goal is not None:
+        plan["goal"] = args.goal
+    if args.owner is not None:
+        plan["owner"] = args.owner
+    if args.set_status is not None:
+        value = _normalize_id(args.set_status)
+        if value and value in INITIATIVE_STATUS_VALUES:
+            plan["status"] = value
+        else:
+            raise SystemExit(f"Invalid initiative status: {value}")
+    if args.profile is not None:
+        plan["workflow_profile"] = args.profile
+
+    milestones = plan.get("milestones") if isinstance(plan.get("milestones"), list) else []
+    for ms in args.add_milestone:
+        payload = _parse_milestone_payload(ms)
+        payload["milestone_id"] = payload.get("milestone_id") or _next_milestone_id_from_items(milestones)
+        milestones.append(_normalize_milestone_payload(args.initiative_id, payload))
+    plan["milestones"] = milestones
+
+    for item in args.set_milestone_status:
+        if ":" not in item:
+            continue
+        mid, st = [x.strip() for x in item.split(":", 1)]
+        for m in milestones:
+            if not isinstance(m, dict):
+                continue
+            if _normalize_id(m.get("milestone_id")) == mid:
+                m["status"] = _normalize_milestone_status(st)
+                break
+
+    atomic_write_json(plan_path, plan)
+    _write_initiative_status(repo, args.initiative_id, plan)
+    print(f"[csk] initiative updated: {args.initiative_id}")
+
+
+def _initiative_collect_runnable_milestones(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+    milestones = []
+    for m in plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []:
+        if not isinstance(m, dict):
+            continue
+        status = _normalize_milestone_status(m.get("status"))
+        if status != "planned":
+            continue
+        deps = m.get("depends_on") or []
+        dep_ok = True
+        if isinstance(deps, list):
+            existing = {item.get("milestone_id") for item in plan.get("milestones", []) if isinstance(item, dict)}
+            for dep in deps:
+                if dep not in existing:
+                    dep_ok = False
+                    break
+                dep_item = next((x for x in plan.get("milestones", []) if isinstance(x, dict) and x.get("milestone_id") == dep), None)
+                if dep_item and _normalize_milestone_status(dep_item.get("status")) != "done":
+                    dep_ok = False
+                    break
+        if dep_ok:
+            milestones.append(m)
+    return milestones
+
+
+def _initiative_split_auto_fill(iroot: Path, plan: Dict[str, Any], repo: Path) -> int:
+    modules = _load_registry_modules(repo)
+    created = 0
+    for m in plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []:
+        if not isinstance(m, dict):
+            continue
+        items = m.get("module_items")
+        if not isinstance(items, list) or not items:
+            m["module_items"] = []
+            for mid, _ in modules:
+                m["module_items"].append({
+                    "module_id": mid,
+                    "role": "shared",
+                    "participation": "active",
+                    "module_task_ids": [],
+                    "reason_if_not_applicable": "",
+                })
+            created += 1
+    return created
+
+
+def cmd_initiative_split(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    plan, iroot = _load_initiative_plan(repo, args.initiative_id)
+    if not args.dry_run:
+        updated = False
+        if args.mode == "auto":
+            if not isinstance(plan.get("milestones"), list):
+                plan["milestones"] = []
+            if _initiative_split_auto_fill(iroot, plan, repo):
+                updated = True
+        if updated:
+            atomic_write_json(iroot / "initiative.plan.json", plan)
+            status = _write_initiative_status(repo, plan.get("initiative_id"), plan)
+            print(f"[csk] initiative split synced: {args.initiative_id} (updated)")
+            print(f"[csk] milestones: {len(plan.get('milestones', []))}, status={status.get('status')}")
+        else:
+            print(f"[csk] initiative split checked: no auto changes needed for {args.initiative_id}")
+        return
+
+    profile = _load_initiative_profile(repo)
+    print(f"[csk] initiative split dry-run for {args.initiative_id}")
+    for m in plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []:
+        if not isinstance(m, dict):
+            continue
+        mid = _normalize_id(m.get("milestone_id"))
+        total_modules = len(m.get("module_items") or [])
+        print(f"- {mid}: {m.get('title', '<no-title>')} (module_items={total_modules})")
+        print(f"  default_profile: {profile.get('default_profile')}")
+
+
+def _initiative_spawn_milestone(
+    repo: Path,
+    profile: Dict[str, Any],
+    plan: Dict[str, Any],
+    milestone: Dict[str, Any],
+    module_id_filter: Optional[str] = None,
+) -> List[Tuple[str, str]]:
+    mid = _normalize_id(milestone.get("milestone_id"))
+    created: List[Tuple[str, str]] = []
+    module_items = milestone.get("module_items")
+    if not isinstance(module_items, list):
+        module_items = []
+        milestone["module_items"] = module_items
+
+    pattern = _initiative_profile_for_plan(plan.get("workflow_profile"), profile).get(
+        "module_task_naming",
+        "{initiative_id}/{milestone_id}/{module_id}",
+    )
+
+    for item in module_items:
+        if not isinstance(item, dict):
+            continue
+        m_id = _normalize_id(item.get("module_id"))
+        if not m_id:
+            continue
+        participation = _normalize_milestone_participation(item.get("participation", "active"))
+        if participation != "active":
+            continue
+        if module_id_filter and m_id != module_id_filter:
+            continue
+
+        existing = item.get("module_task_ids")
+        if not isinstance(existing, list):
+            existing = []
+            item["module_task_ids"] = existing
+
+        # Avoid duplicate live tasks if re-run.
+        valid_existing = []
+        for existing_tid in existing:
+            try:
+                tdir, _ = task_paths(repo, m_id, existing_tid)
+                valid_existing.append(existing_tid)
+                if (tdir / "run" / "status.json").exists():
+                    pass
+            except SystemExit:
+                continue
+        if valid_existing:
+            item["module_task_ids"] = valid_existing
+
+        ttitle = _initiative_build_task_title(
+            pattern=pattern,
+            initiative_id=plan.get("initiative_id", ""),
+            milestone_id=mid,
+            module_id=m_id,
+            initiative_title=plan.get("title", ""),
+            milestone_title=_normalize_id(milestone.get("title", "")),
+        )
+        tid, _tdir = _create_module_task(
+            repo,
+            m_id,
+            ttitle,
+            initiative_id=plan.get("initiative_id"),
+            initiative_milestone=mid,
+        )
+        if tid not in item["module_task_ids"]:
+            item["module_task_ids"].append(tid)
+        created.append((m_id, tid))
+
+    milestone["status"] = "active"
+    return created
+
+
+def cmd_initiative_spawn(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    plan, iroot = _load_initiative_plan(repo, args.initiative_id)
+    milestones = plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []
+    milestone_id = _safe_milestone_id(args.milestone_id)
+    milestone = next((m for m in milestones if isinstance(m, dict) and _normalize_id(m.get("milestone_id")) == milestone_id), None)
+    if not milestone:
+        raise SystemExit(f"Milestone not found: {milestone_id}")
+
+    profile = _load_initiative_profile(repo)
+    created = _initiative_spawn_milestone(repo, profile, plan, milestone, _normalize_id(args.module_id))
+    atomic_write_json(iroot / "initiative.plan.json", plan)
+    status = _write_initiative_status(repo, args.initiative_id, plan)
+    print(f"[csk] initiative spawn done: {args.initiative_id}/{milestone_id} created={len(created)}")
+    if args.module_id and not created:
+        print(f"[csk] no active tasks created for module={args.module_id}; it may be not_applicable or task already exists.")
+    for m, t in created:
+        print(f"[csk] task {t} in module {m}")
+    print(f"[csk] milestone status now: {milestone.get('status')}, initiative status: {status.get('status')}")
+
+
+def cmd_initiative_run(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    plan, iroot = _load_initiative_plan(repo, args.initiative_id)
+    profile_obj = _load_initiative_profile(repo)
+    profile = _initiative_profile_for_plan(plan.get("workflow_profile"), profile_obj)
+
+    max_count = args.milestone_count
+    if args.next:
+        max_count = 1
+    if max_count is None:
+        max_count = int(profile.get("milestones_per_iteration", 1))
+
+    run_list = _initiative_collect_runnable_milestones(plan)[:max_count]
+    if not run_list:
+        print(f"[csk] initiative {args.initiative_id}: no runnable milestones found")
+        return
+
+    if not args.apply:
+        print(f"[csk] initiative {args.initiative_id}: runnable milestones preview:")
+        for m in run_list:
+            print(f"- {m.get('milestone_id')}: {m.get('title')}")
+        print("[csk] add --apply to materialize module tasks.")
+        return
+
+    all_created: List[Tuple[str, str]] = []
+    for milestone in run_list:
+        created = _initiative_spawn_milestone(repo, profile_obj, plan, milestone)
+        all_created.extend(created)
+    plan["status"] = "active"
+    atomic_write_json(iroot / "initiative.plan.json", plan)
+    _write_initiative_status(repo, args.initiative_id, plan)
+    print(f"[csk] initiative run completed: {args.initiative_id}, created={len(all_created)} tasks")
+    for m, t in all_created:
+        print(f"- {m}/{t}")
+
+
+def cmd_initiative_status(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    ensure_app_skeleton(repo)
+    initiatives = []
+    for dirpath in sorted(_initiative_root(repo).iterdir()):
+        if not dirpath.is_dir() or not dirpath.name.startswith("I-"):
+            continue
+        if args.initiative_id and dirpath.name != _safe_initiative_id(args.initiative_id):
+            continue
+        plan_path = dirpath / "initiative.plan.json"
+        status_path = dirpath / "initiative.status.json"
+        plan = load_json(plan_path, default={})
+        status = load_json(status_path, default={})
+        initiatives.append({
+            "initiative_id": dirpath.name,
+            "title": plan.get("title", ""),
+            "goal": plan.get("goal", ""),
+            "status": plan.get("status", ""),
+            "milestones": len(plan.get("milestones", []) if isinstance(plan.get("milestones"), list) else []),
+            "status_file": str(status_path),
+        })
+    if args.json:
+        print(json.dumps(initiatives, indent=2, ensure_ascii=False))
+        return
+    if not initiatives:
+        print("[csk] no initiatives found")
+        return
+    for i in initiatives:
+        print(f"{i['initiative_id']} — {i['title']} | status={i['status']} milestones={i['milestones']}")
+
+
+def cmd_initiative_close(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    plan, iroot = _load_initiative_plan(repo, args.initiative_id)
+    result = _normalize_id(args.result)
+    if result not in {"done", "blocked"}:
+        raise SystemExit(f"Invalid initiative close result: {result}")
+    plan["status"] = result
+    plan.setdefault("evidence", {})
+    plan["evidence"] = {
+        "result": result,
+        "evidence": args.evidence or "",
+        "closed_utc": utc_now_iso(),
+    }
+    atomic_write_json(iroot / "initiative.plan.json", plan)
+    status = _initiative_status_from_plan(plan)
+    status["status"] = result
+    status["updated_utc"] = utc_now_iso()
+    status["evidence"] = args.evidence or ""
+    atomic_write_json(_initiative_status_path(args.initiative_id, repo), status)
+    print(f"[csk] initiative {args.initiative_id} closed as {result}")
+
+
+def cmd_initiative_approve_plan(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    iroot = _initiative_dir(repo, args.initiative_id)
+    if not iroot.exists():
+        raise SystemExit(f"Initiative not found: {args.initiative_id}")
+    plan_path = iroot / "initiative.plan.json"
+    plan = load_json(plan_path, default=None)
+    if not isinstance(plan, dict):
+        raise SystemExit(f"Invalid initiative plan: {plan_path}")
+
+    status = _normalize_id(args.status)
+    if status not in {"draft", "approved"}:
+        raise SystemExit(f"Invalid initiative approval status: {status}")
+
+    plan["status"] = status
+    atomic_write_json(plan_path, plan)
+
+    approval = {
+        "initiative_id": args.initiative_id,
+        "approved_utc": utc_now_iso(),
+        "approved_by": args.by or "user",
+        "note": args.note or "",
+        "status": status,
+    }
+    atomic_write_json(iroot / "approvals" / "initiative-plan-approve.json", approval)
+    status_doc = _write_initiative_status(repo, args.initiative_id, plan)
+    print(f"[csk] initiative {args.initiative_id} approved status={status}, status_file={status_doc.get('status')}")
+
+
+def cmd_reconcile_initiative_artifacts(args: argparse.Namespace) -> None:
+    repo = find_repo_root(Path.cwd())
+    iroot = _initiative_root(repo)
+    if not iroot.exists():
+        print("[csk] no initiatives directory")
+        return
+    changed = 0
+    missing_plan = 0
+    for path in sorted(iroot.iterdir()):
+        if not path.is_dir() or not path.name.startswith("I-"):
+            continue
+        plan = load_json(path / "initiative.plan.json", default=None)
+        if not isinstance(plan, dict):
+            missing_plan += 1
+            continue
+        iid = plan.get("initiative_id", path.name)
+        if not (path / "initiative.summary.md").exists():
+            tpl_summary = _initiative_template_text(repo, "initiative.summary.md")
+            atomic_write_text(path / "initiative.summary.md", tpl_summary.replace("<I-id>", iid).replace("<title>", plan.get("title", iid)))
+            changed += 1
+        if not (path / "initiative.status.json").exists():
+            _write_initiative_status(repo, iid, plan)
+            changed += 1
+    print(f"[csk] reconcile-initiative-artifacts changed={changed} missing_plan={missing_plan}")
 
 
 def cmd_record_user_check(args: argparse.Namespace) -> None:
@@ -1903,6 +2706,110 @@ def _validate_slices_obj(obj: Any) -> Tuple[List[str], List[str]]:
             errors.append(f"slice {sid}: required_gates missing/empty or not list[str]")
     return errors, warnings
 
+
+def _validate_initiative_obj(
+    repo: Path,
+    initiative_id: str,
+    plan: Any,
+    errors: List[str],
+    warnings: List[str],
+) -> None:
+    if not isinstance(plan, dict):
+        errors.append(f"{initiative_id}: initiative.plan.json is not a JSON object")
+        return
+
+    schema = _load_schema(repo, "initiative_plan.schema.json")
+    if schema:
+        errors.extend(_validate_with_jsonschema(plan, schema))
+
+    if not _is_str(plan.get("initiative_id")):
+        warnings.append(f"{initiative_id}: initiative_id missing in initiative.plan.json")
+    if not _is_str(plan.get("title")):
+        errors.append(f"{initiative_id}: title missing or not string")
+
+    status = _normalize_id(plan.get("status"))
+    if status and status not in INITIATIVE_STATUS_VALUES:
+        errors.append(f"{initiative_id}: invalid initiative status '{status}'")
+
+    reg = load_json(repo / ".csk-app" / "registry.json", default={"modules": []})
+    module_ids = set()
+    for module in reg.get("modules", []) if isinstance(reg.get("modules"), list) else []:
+        if isinstance(module, dict) and _is_str(module.get("id")):
+            module_ids.add(module["id"])
+
+    milestones = plan.get("milestones")
+    if not isinstance(milestones, list):
+        errors.append(f"{initiative_id}: milestones must be a list")
+        return
+
+    by_mid = set()
+    existing = {m.get("milestone_id") for m in milestones if isinstance(m, dict)}
+    for idx, m in enumerate(milestones):
+        if not isinstance(m, dict):
+            errors.append(f"{initiative_id}: milestones[{idx}] is not an object")
+            continue
+
+        mid = _normalize_id(m.get("milestone_id"))
+        if not re.match(r"^M-\d+$", mid):
+            errors.append(f"{initiative_id}: milestones[{idx}].milestone_id is invalid ({mid})")
+            continue
+        if mid in by_mid:
+            errors.append(f"{initiative_id}: duplicate milestone_id {mid}")
+        by_mid.add(mid)
+
+        mstatus = _normalize_milestone_status(m.get("status"))
+        if not mstatus:
+            warnings.append(f"{initiative_id}: milestone {mid} has missing status")
+
+        deps = m.get("depends_on", [])
+        if deps is not None and not _is_list_of_str(deps):
+            warnings.append(f"{initiative_id}: milestone {mid}: depends_on must be list[str]")
+        else:
+            for dep in deps:
+                if dep and dep not in existing:
+                    errors.append(f"{initiative_id}: milestone {mid}: depends_on reference missing {dep}")
+
+        module_items = m.get("module_items", [])
+        if not isinstance(module_items, list):
+            warnings.append(f"{initiative_id}: milestone {mid}: module_items should be list")
+            continue
+        for item_idx, item in enumerate(module_items):
+            if not isinstance(item, dict):
+                errors.append(f"{initiative_id}: milestone {mid}: module_items[{item_idx}] is not object")
+                continue
+            mod = _normalize_id(item.get("module_id"))
+            if not mod:
+                errors.append(f"{initiative_id}: milestone {mid}: module_items[{item_idx}].module_id missing")
+                continue
+            if mod not in module_ids:
+                warnings.append(f"{initiative_id}: milestone {mid}: module {mod} is not in registry")
+            role = _normalize_milestone_role(item.get("role", "shared"))
+            item["role"] = role
+            participation = _normalize_milestone_participation(item.get("participation", "active"))
+            item["participation"] = participation
+            reason = _normalize_id(item.get("reason_if_not_applicable"))
+            if participation == "not_applicable" and not reason:
+                errors.append(
+                    f"{initiative_id}: milestone {mid}: module {mod} marked not_applicable but reason_if_not_applicable is missing"
+                )
+            tids = item.get("module_task_ids")
+            if tids is None:
+                continue
+            if not _is_list_of_str(tids):
+                warnings.append(f"{initiative_id}: milestone {mid}: module_items[{item_idx}].module_task_ids must be list[str]")
+            else:
+                for tid in tids:
+                    if not re.match(r"^T-\d+$", _normalize_id(tid)):
+                        warnings.append(
+                            f"{initiative_id}: milestone {mid}: module_item {mod}: invalid task id {tid}"
+                        )
+                    if mod in module_ids:
+                        module_root = (repo / next((m["path"] for m in reg.get("modules", []) if m.get("id") == mod), "."))
+                        tdir = module_root / ".csk" / "tasks" / tid
+                        if tid and not tdir.exists():
+                            warnings.append(f"{initiative_id}: milestone {mid}: module_item {mod}: referenced task not found {tid}")
+
+
 def _validate_jsonl(path: Path, required_keys: List[str], enums: Dict[str, List[str]] = {}) -> Tuple[List[str], List[str]]:
     errors: List[str] = []
     warnings: List[str] = []
@@ -2066,6 +2973,41 @@ def cmd_validate(args: argparse.Namespace) -> None:
     e, w = _validate_sync_pack_migration(repo, args.strict)
     errors += e
     warnings += w
+
+    # initiative-level validation
+    initiative_root = _initiative_root(repo)
+    if initiative_root.exists():
+        for dirpath in sorted(initiative_root.iterdir()):
+            if not dirpath.is_dir() or not dirpath.name.startswith("I-"):
+                continue
+            plan_path = dirpath / "initiative.plan.json"
+            summary_path = dirpath / "initiative.summary.md"
+            status_path = dirpath / "initiative.status.json"
+            status_doc_path = dirpath / "initiative.status.json"
+            if not plan_path.exists():
+                errors.append(f"{dirpath.name}: missing initiative.plan.json")
+                continue
+            plan = load_json(plan_path, default=None)
+            _validate_initiative_obj(repo, dirpath.name, plan, errors, warnings)
+            if not summary_path.exists():
+                if args.strict:
+                    errors.append(f"{dirpath.name}: missing initiative.summary.md")
+                else:
+                    warnings.append(f"{dirpath.name}: missing initiative.summary.md")
+            if not status_path.exists():
+                if args.strict:
+                    errors.append(f"{dirpath.name}: missing initiative.status.json")
+                else:
+                    warnings.append(f"{dirpath.name}: missing initiative.status.json")
+            else:
+                initiative_status_schema = _load_schema(repo, "initiative_status.schema.json")
+                if initiative_status_schema:
+                    errors += _validate_with_jsonschema(load_json(status_doc_path, default={}), initiative_status_schema)
+                status_obj = load_json(status_doc_path, default={})
+                if not _is_str(status_obj.get("initiative_id")):
+                    warnings.append(f"{dirpath.name}: initiative.status.json missing initiative_id")
+                if not _is_str(status_obj.get("status")):
+                    warnings.append(f"{dirpath.name}: initiative.status.json missing status")
 
     # module validation
     modules = reg.get("modules") or []
@@ -2401,6 +3343,67 @@ def main(argv: Optional[List[str]] = None) -> int:
     sp.add_argument("--strict", action="store_true", help="Return non-zero if any task has missing blocks.")
     sp.add_argument("--json", action="store_true", help="Output JSON report.")
     sp.set_defaults(fn=cmd_reconcile_task_artifacts)
+
+    sp = sub.add_parser("initiative-new")
+    sp.add_argument("title")
+    sp.add_argument("--goal", default="")
+    sp.add_argument("--owner", default="")
+    sp.add_argument("--profile", default=None)
+    sp.add_argument("--milestone", dest="initial_milestones", action="append", default=[], help="Seed milestone as JSON object/string.")
+    sp.set_defaults(fn=cmd_initiative_new)
+
+    sp = sub.add_parser("initiative-edit")
+    sp.add_argument("initiative_id")
+    sp.add_argument("--title")
+    sp.add_argument("--goal")
+    sp.add_argument("--owner")
+    sp.add_argument("--set-status")
+    sp.add_argument("--profile")
+    sp.add_argument("--add-milestone", action="append", default=[])
+    sp.add_argument("--set-milestone-status", action="append", default=[])
+    sp.set_defaults(fn=cmd_initiative_edit)
+
+    sp = sub.add_parser("initiative-split")
+    sp.add_argument("initiative_id")
+    sp.add_argument("--mode", choices=["auto", "manual"], default="auto")
+    sp.add_argument("--dry-run", action="store_true")
+    sp.set_defaults(fn=cmd_initiative_split)
+
+    sp = sub.add_parser("initiative-spawn")
+    sp.add_argument("initiative_id")
+    sp.add_argument("milestone_id")
+    sp.add_argument("--module-id", default=None)
+    sp.set_defaults(fn=cmd_initiative_spawn)
+
+    sp = sub.add_parser("initiative-run")
+    sp.add_argument("initiative_id")
+    sp.add_argument("--next", action="store_true")
+    sp.add_argument("--milestone-count", type=int, default=None)
+    sp.add_argument("--apply", action="store_true")
+    sp.set_defaults(fn=cmd_initiative_run)
+
+    sp = sub.add_parser("initiative-status")
+    sp.add_argument("initiative_id", nargs="?")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(fn=cmd_initiative_status)
+
+    sp = sub.add_parser("initiative-close")
+    sp.add_argument("initiative_id")
+    sp.add_argument("result", choices=["done", "blocked"])
+    sp.add_argument("--evidence", default="")
+    sp.set_defaults(fn=cmd_initiative_close)
+
+    sp = sub.add_parser("initiative-approve-plan")
+    sp.add_argument("initiative_id")
+    sp.add_argument("--status", default="approved")
+    sp.add_argument("--by", default="user")
+    sp.add_argument("--note", default="")
+    sp.set_defaults(fn=cmd_initiative_approve_plan)
+
+    sp = sub.add_parser("reconcile-initiative-artifacts")
+    sp.add_argument("--json", action="store_true")
+    sp.add_argument("--strict", action="store_true")
+    sp.set_defaults(fn=cmd_reconcile_initiative_artifacts)
 
     sp = sub.add_parser("scope-check")
     sp.add_argument("module_or_task_id")

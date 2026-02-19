@@ -10,6 +10,7 @@ Use inside a module directory. This is the enforceable lifecycle:
 1) Planning
 - Draft `tasks/<T>/plan.md`, `tasks/<T>/plan.summary.md`, `tasks/<T>/user_acceptance.md`, and `tasks/<T>/slices.json`
 - Run `$csk-critic` until no P0/P1
+- If task metadata contains `initiative_id`/`initiative_milestone`, keep it in all summaries.
 - Freeze plan:
   - from module root: `python tools/csk/csk.py freeze-plan <T>`
   - legacy: `python tools/csk/csk.py freeze-plan <module> <T>`
@@ -67,6 +68,10 @@ For each slice S-xxx:
 - Present ready_report path and manual validation steps.
 - Required order before ready approval in this module flow:
   - `record-review` -> `record-user-check --result pass` -> `validate-ready` -> `approve-ready`
+- `validate-ready` additionally requires:
+  - `user_check` proof exists and result `pass`
+  - `plan_summary_sha256` in freeze to match `plan.summary.md`
+  - migration handshake done after pending csk-update, if any
 - Ask user for ready approval and record:
   - from module root: `python tools/csk/csk.py approve-ready <T>`
   - legacy: `python tools/csk/csk.py approve-ready <module> <T>`

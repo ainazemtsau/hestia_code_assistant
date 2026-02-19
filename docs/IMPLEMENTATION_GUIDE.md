@@ -20,6 +20,7 @@ Enforcement is achieved via:
 Root:
 - AGENTS.md
 - .csk-app/registry.json
+- .csk-app/initiatives/
 - tools/csk/csk.py
 - .agents/skills/csk/SKILL.md
 
@@ -54,6 +55,17 @@ Migration for existing tasks:
 - If `plan.md` was created before this change, use `python tools/csk/csk.py regen-plan-summary <module> <task>`.
 - If `plan.md` lacks `PLAN_SUMMARY_START/END`, command creates `plan.summary.md` with a `Needs cleanup` placeholder that must be replaced.
 - If `plan.md` lacks `USER_ACCEPTANCE_START/END`, `regen-user-acceptance` creates `user_acceptance.md` with a `Needs cleanup` placeholder.
+
+## Initiative orchestration (app-level)
+For large initiatives spanning modules:
+- Create initiative: `python tools/csk/csk.py initiative-new "<name>" --goal ... --owner ...`
+- Edit milestones/profiles: `python tools/csk/csk.py initiative-edit <I-id> ...`
+- Auto split: `python tools/csk/csk.py initiative-split <I-id> --mode auto`
+- Run iterations: `python tools/csk/csk.py initiative-run <I-id> --next --apply`
+
+`initiative-run` creates module tasks only for `module_items` with `participation=active`.
+Track aggregate progress in `initiative.status.json`.
+- Profile defaults: `.csk-app/initiatives/process.profile.json`
 
 ## Scope enforcement
 Each slice declares allowed_paths (module-relative globs).
@@ -109,6 +121,8 @@ This checks:
 - Подтвердить `migration-ack` для сгенерированного migration отчета.
 - Для уже существующих задач прогнать:
   - `python tools/csk/csk.py reconcile-task-artifacts --strict`
+- Для уже существующих инициатив (новый app-уровень):
+  - `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
 - Только после `migration` подтверждения продолжать этапы READY/approve-ready.
 
 ## Retro (learning loop)

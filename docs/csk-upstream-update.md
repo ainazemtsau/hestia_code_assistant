@@ -57,6 +57,8 @@ Retro workflow evolution is stored separately:
    - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> [--migration-notes ...]`
    - For legacy tasks from older packs, run:
      - `python tools/csk/csk.py reconcile-task-artifacts --strict`
+   - For legacy initiatives from older packs, run:
+     - `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
 
 ## Decision contract
 

@@ -64,9 +64,27 @@
      - `docs/VALIDATION.md`
      - `docs/FILE_LAYOUT.md`
      - `docs/IMPLEMENTATION_GUIDE.md`
-     - `docs/csk-migration-playbook.md`
-     - `docs/csk-upstream-update.md`
-     - Скиллы (`csk`, `csk-module`, `csk-reviewer`, `csk-update`).
+   - `docs/csk-migration-playbook.md`
+   - `docs/csk-upstream-update.md`
+   - Скиллы (`csk`, `csk-module`, `csk-reviewer`, `csk-update`).
+
+<a id="initiative-orchestration"></a>
+### v2026.02.21 (app-level initiative orchestration)
+
+6. **Добавлен global initiative layer**
+   - Добавлены команды:
+     - `initiative-new / initiative-edit / initiative-split / initiative-run / initiative-spawn / initiative-status`
+     - `reconcile-initiative-artifacts`
+     - `initiative-approve-plan`
+   - Добавлены шаблоны:
+     - `templates/initiative/initiative.md`
+     - `templates/initiative/initiative.summary.md`
+   - Добавлены схемы:
+     - `schemas/initiative_plan.schema.json`
+     - `schemas/initiative_status.schema.json`
+   - Новые артефакты:
+     - `initiative.plan.json`, `initiative.summary.md`, `initiative.status.json`
+     - `approvals/initiative-plan-approve.json` (необязательное, но рекомендуемое для крупных инициатив)
 
 ## 3) Обязательный post-update flow (для AI и людей)
 
@@ -77,9 +95,11 @@
 3. Подтвердить миграцию:
    - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> --migration-notes "..."`
 4. Для старых задач прогнать миграционный проход артефактов:
-   - `python tools/csk/csk.py reconcile-task-artifacts --strict`
-   - при больших задачниках сначала по модулю:
-     - `python tools/csk/csk.py reconcile-task-artifacts --module-id <module> --strict`
+  - `python tools/csk/csk.py reconcile-task-artifacts --strict`
+  - при больших задачниках сначала по модулю:
+    - `python tools/csk/csk.py reconcile-task-artifacts --module-id <module> --strict`
+ - для инициатив:
+   - `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
 5. Финальная проверка репозитория:
    - `python tools/csk/csk.py validate --all --strict`
 6. Только после шагов 1–5 переходить к `validate-ready`/`approve-ready`.
@@ -120,6 +140,8 @@
 - `templates/task/plan.summary.md`
 - `templates/task/user_acceptance.md`
 - `schemas/user_check.schema.json`
+- `schemas/initiative_plan.schema.json`
+- `schemas/initiative_status.schema.json`
 - `docs/csk-update-changelog.md` (этот документ)
 - `docs/csk-upstream-update.md`
 - `docs/csk-migration-playbook.md`
@@ -127,6 +149,8 @@
 - `docs/VALIDATION.md`
 - `docs/CONTRACTS.md`
 - `docs/FILE_LAYOUT.md`
+- `templates/initiative/initiative.md`
+- `templates/initiative/initiative.summary.md`
 - `.agents/skills/csk/SKILL.md`
 - `.agents/skills/csk-module/SKILL.md`
 - `.agents/skills/csk-update/SKILL.md`
@@ -137,6 +161,7 @@
 ```bash
 python tools/csk/sync_upstream.py migration-status --migration-strict
 python tools/csk/csk.py reconcile-task-artifacts --strict
+python tools/csk/csk.py reconcile-initiative-artifacts --strict
 python tools/csk/csk.py validate --all --strict
 ```
 

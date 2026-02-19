@@ -29,18 +29,27 @@ Operator flow (always in this order)
 - Confirm by:
   - `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
 - Only then continue normal operations.
-7) Legacy task artifact migration (required for old tasks):
+7) Post-ack enforcement check:
+- run:
+  - `python tools/csk/sync_upstream.py migration-status --migration-strict`
+  - `python tools/csk/csk.py reconcile-task-artifacts --strict`
+  - `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
+  - `python tools/csk/csk.py validate --all --strict`
+- AI assistant must treat failures in this section as blockers for any `approve-ready` path until closed.
+8) Legacy task artifact migration (required for old tasks):
 - `python tools/csk/csk.py reconcile-task-artifacts --require-block --strict`
 
 Required post-update contract (strict):
 - If pack version in manifest is newer than `current_pack_version`, READY is blocked until migration is fully acknowledged.
+- All new contracts are introduced via migration checklist; no shortcuts on required pack steps.
 - Mandatory execution order for every update:
   1. `python tools/csk/sync_upstream.py migration-status --migration-strict`
   2. Close required actions in `csk-sync-migration-*.md`
   3. `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
   4. `python tools/csk/csk.py reconcile-task-artifacts --strict` (или по модулю)
-  5. `python tools/csk/csk.py validate --all --strict`
-  6. Только после этого продолжать до `approve-ready`.
+  5. `python tools/csk/csk.py reconcile-initiative-artifacts --strict` (если есть новые initiative-артефакты/legacy инициативы)
+  6. `python tools/csk/csk.py validate --all --strict`
+  7. Только после этого продолжать до `approve-ready`.
 
 Canonical migration reference:
 - `docs/csk-update-changelog.md`

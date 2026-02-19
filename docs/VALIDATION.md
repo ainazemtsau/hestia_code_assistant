@@ -48,6 +48,11 @@ python tools/csk/csk.py validate --json
 - `plan.freeze.json` drift (hash mismatch)
 - `plan.summary.md` presence + `plan_summary_sha256` hash consistency
 - `user_acceptance.md` presence
+- app-level initiative contracts in `.csk-app/initiatives/`:
+  - `initiative.plan.json`
+  - `initiative.summary.md`
+  - `initiative.status.json`
+  - `initiative.plan.json` schema/consistency (`milestones`, `module_items`)
 - `approvals/user-check.json` presence + schema + `result=pass` for readiness
 - sync update migration state (`.csk-app/sync/state.json`) and pending migration acknowledgement
   (`validate-ready`/`approve-ready` now refuse when migration is still pending)

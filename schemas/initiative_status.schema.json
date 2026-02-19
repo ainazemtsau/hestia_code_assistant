@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CSK initiative status",
+  "type": "object",
+  "required": [
+    "initiative_id",
+    "updated_utc",
+    "status",
+    "milestones",
+    "totals"
+  ],
+  "properties": {
+    "initiative_id": {
+      "type": "string"
+    },
+    "updated_utc": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "approved", "active", "done", "blocked"]
+    },
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "milestone_id",
+          "status",
+          "active_modules",
+          "module_items",
+          "module_task_links"
+        ],
+        "properties": {
+          "milestone_id": {
+            "type": "string",
+            "pattern": "^M-\\d+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["planned", "active", "done", "blocked", "skipped"]
+          },
+          "active_modules": { "type": "integer", "minimum": 0 },
+          "module_items": { "type": "integer", "minimum": 0 },
+          "module_task_links": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "milestones",
+        "module_items",
+        "module_tasks",
+        "active_modules_all"
+      ],
+      "properties": {
+        "milestones": { "type": "integer", "minimum": 0 },
+        "module_items": { "type": "integer", "minimum": 0 },
+        "module_tasks": { "type": "integer", "minimum": 0 },
+        "active_modules_all": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": ["string", "object", "null"]
+    }
+  },
+  "additionalProperties": true
+}

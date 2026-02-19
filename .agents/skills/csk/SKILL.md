@@ -9,6 +9,8 @@ Hard rules (enforced by artifacts)
 - No non-trivial coding until:
   - plan.freeze.json exists
   - plan approval exists (approvals/plan.json)
+- After `csk-update`, complete the migration checklist before resuming READY workflows.
+- If migration is pending, do not allow readiness actions.
 - Scope control is mandatory:
   - run `python tools/csk/csk.py scope-check ...` before verify
 - Verification is mandatory:
@@ -28,7 +30,13 @@ Routing (where you are)
 
 App context behavior (repo root)
 - For "bootstrap": run bootstrap + show module candidates and recommend mapping.
-  - For a new spec:
+- For a large initiative (multi-module/long horizon):
+  1) create initiative: `python tools/csk/csk.py initiative-new "<title>" --goal "<goal>"`
+  2) shape milestones/modules: `python tools/csk/csk.py initiative-edit <I-id> --add-milestone ...`
+  3) auto-fill or review split: `python tools/csk/csk.py initiative-split <I-id> --mode auto`
+  4) run by milestones: `python tools/csk/csk.py initiative-run <I-id> --next --apply`
+  5) monitor: `python tools/csk/csk.py initiative-status <I-id>`
+- For a local module task burst:
   1) Identify affected modules (from registry + code inspection). Do not ask user to list modules.
   2) For each affected module:
      - create task: `python tools/csk/csk.py new-task <module> "<title>"`
@@ -55,6 +63,15 @@ App context behavior (repo root)
      - what runs in parallel vs sequential
      - cross-module API slices vs consumer slices
      - never expand full `plan.md` in chat
+
+Mandatory post-update flow (after `csk-update` apply):
+1) `python tools/csk/sync_upstream.py migration-status --migration-strict`
+2) perform all required actions listed in generated `csk-sync-migration-*.md`
+3) `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
+4) `python tools/csk/csk.py reconcile-task-artifacts --strict`
+5) `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
+6) `python tools/csk/csk.py validate --all --strict`
+7) Continue module/initiative flows only after all above pass.
 
 Recommended chat format after creating task:
 ```

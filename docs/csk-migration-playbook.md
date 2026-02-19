@@ -51,6 +51,8 @@ Pending migration must be acknowledged:
 
 10. After migration apply:
    - run `migration-status` and only then continue with normal csk workflow.
+   - run `python tools/csk/csk.py reconcile-task-artifacts --strict` (legacy tasks)
+   - run `python tools/csk/csk.py reconcile-initiative-artifacts --strict` (legacy initiatives)
 
 ## Module-specific adaptation
 
