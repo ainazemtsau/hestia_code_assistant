@@ -92,17 +92,21 @@
 
 1. `python tools/csk/sync_upstream.py migration-status --migration-strict`
 2. Выполнить все пункты из сгенерированного `csk-sync-migration-*.md` (если есть).
-3. Подтвердить миграцию:
+3. Сформировать стратегию внедрения без потери текущего потока:
+   - `python tools/csk/sync_upstream.py migration-wizard`
+   - проверить `command_surface` и `command_gaps`: какие команды из нового pack уже есть, а какие нужно аккуратно внедрить для module-first команд.
+   - выбрать сценарий rollout (module-first / mixed / initiative-first) и зафиксировать решения.
+4. Подтвердить миграцию:
    - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> --migration-notes "..."`
-4. Для старых задач прогнать миграционный проход артефактов:
+5. Для старых задач прогнать миграционный проход артефактов:
   - `python tools/csk/csk.py reconcile-task-artifacts --strict`
   - при больших задачниках сначала по модулю:
     - `python tools/csk/csk.py reconcile-task-artifacts --module-id <module> --strict`
  - для инициатив:
    - `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
-5. Финальная проверка репозитория:
+6. Финальная проверка репозитория:
    - `python tools/csk/csk.py validate --all --strict`
-6. Только после шагов 1–5 переходить к `validate-ready`/`approve-ready`.
+7. Только после шагов 1–6 переходить к `validate-ready`/`approve-ready`.
 
 Если хотя бы один шаг не пройден — READY не пройдёт даже при наличии всех остальных proofs.
 
@@ -160,6 +164,7 @@
 
 ```bash
 python tools/csk/sync_upstream.py migration-status --migration-strict
+python tools/csk/sync_upstream.py migration-wizard
 python tools/csk/csk.py reconcile-task-artifacts --strict
 python tools/csk/csk.py reconcile-initiative-artifacts --strict
 python tools/csk/csk.py validate --all --strict

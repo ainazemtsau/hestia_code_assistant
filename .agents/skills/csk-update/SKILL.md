@@ -26,6 +26,12 @@ Operator flow (always in this order)
 6) Mandatory migration closure (new):
 - `python tools/csk/sync_upstream.py migration-status --migration-strict`
 - Run all migration actions from `.csk-app/reports/csk-sync-migration-*.md`
+- Generate rollout guidance for existing module-only flows:
+  - `python tools/csk/sync_upstream.py migration-wizard`
+  - Review `command_surface.command_gaps` in wizard JSON/MD:
+    - что из нового pack уже есть в текущем `csk.py`,
+    - что еще нужно ввести или явно зафиксировать как "не используется".
+- Keep `new-task` module workflow valid unless the team intentionally switches to initiative flow in the new rollout.
 - Confirm by:
   - `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
 - Only then continue normal operations.
@@ -45,11 +51,12 @@ Required post-update contract (strict):
 - Mandatory execution order for every update:
   1. `python tools/csk/sync_upstream.py migration-status --migration-strict`
   2. Close required actions in `csk-sync-migration-*.md`
-  3. `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
-  4. `python tools/csk/csk.py reconcile-task-artifacts --strict` (или по модулю)
-  5. `python tools/csk/csk.py reconcile-initiative-artifacts --strict` (если есть новые initiative-артефакты/legacy инициативы)
-  6. `python tools/csk/csk.py validate --all --strict`
-  7. Только после этого продолжать до `approve-ready`.
+  3. `python tools/csk/sync_upstream.py migration-wizard`
+  4. `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
+  5. `python tools/csk/csk.py reconcile-task-artifacts --strict` (или по модулю)
+  6. `python tools/csk/csk.py reconcile-initiative-artifacts --strict` (если есть новые initiative-артефакты/legacy инициативы)
+  7. `python tools/csk/csk.py validate --all --strict`
+  8. Только после этого продолжать до `approve-ready`.
 
 Canonical migration reference:
 - `docs/csk-update-changelog.md`
@@ -74,6 +81,7 @@ Modes
 - `plan`: writes decision template + candidate analysis.
 - `migrate` / `apply`: requires approved decision, bootstraps missing overlay paths per manifest item, applies core sync, then overlay reapply.
 - `migration-status`: validates required post-update steps and pending migration state.
+- `migration-wizard`: generates phased rollout plan for teams that already execute module tasks.
 - `migration-ack`: marks migration report as acknowledged.
 - `validate`: runs workflow consistency checks (including migration block status).
 

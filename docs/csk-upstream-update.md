@@ -53,7 +53,21 @@ Retro workflow evolution is stored separately:
 4. `migration-status`
    - `python tools/csk/sync_upstream.py migration-status [--migration-strict]`
 
-5. `migration-ack`
+5. `migration-wizard`
+   - `python tools/csk/sync_upstream.py migration-wizard`
+   - Generates:
+     - machine report: `.csk-app/reports/csk-sync-migration-wizard-*.json`
+     - migration playbook: `.csk-app/reports/csk-sync-wizard-*.md`
+   - Shows:
+     - current workflow compatibility snapshot,
+     - command surface state,
+     - command surface change from migration source,
+     - per-command diff between deployed `csk.py` and migration snapshot (`added`, `removed`, `extra`),
+     - what changed for existing users,
+     - safe rollout phases (`module-first` → `mixed` → `initiative`).
+   - Use it after any update before mandatory READY flow to pick non-breaking adoption order.
+
+6. `migration-ack`
    - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> [--migration-notes ...]`
    - For legacy tasks from older packs, run:
      - `python tools/csk/csk.py reconcile-task-artifacts --strict`

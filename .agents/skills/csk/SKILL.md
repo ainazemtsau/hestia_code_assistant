@@ -67,11 +67,13 @@ App context behavior (repo root)
 Mandatory post-update flow (after `csk-update` apply):
 1) `python tools/csk/sync_upstream.py migration-status --migration-strict`
 2) perform all required actions listed in generated `csk-sync-migration-*.md`
-3) `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
-4) `python tools/csk/csk.py reconcile-task-artifacts --strict`
-5) `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
-6) `python tools/csk/csk.py validate --all --strict`
-7) Continue module/initiative flows only after all above pass.
+3) preserve existing module-first flow; if needed, build non-breaking rollout using:
+   - `python tools/csk/sync_upstream.py migration-wizard`
+4) `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
+5) `python tools/csk/csk.py reconcile-task-artifacts --strict`
+6) `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
+7) `python tools/csk/csk.py validate --all --strict`
+8) Continue module/initiative flows only after all above pass.
 
 Recommended chat format after creating task:
 ```

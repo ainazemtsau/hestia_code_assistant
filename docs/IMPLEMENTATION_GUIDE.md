@@ -117,6 +117,9 @@ This checks:
 
 ## После `csk-update` (обязательный этап)
 - Запустить `python tools/csk/sync_upstream.py migration-status --migration-strict`.
+- Сформировать стратегию обновления для текущего проекта:
+  - `python tools/csk/sync_upstream.py migration-wizard`
+  - Не ломать уже выполненный модульный поток; применять initiative-first только для крупных кросс-модульных сценариев.
 - Довести все шаги из `csk-sync-migration-*.md`.
 - Подтвердить `migration-ack` для сгенерированного migration отчета.
 - Для уже существующих задач прогнать:

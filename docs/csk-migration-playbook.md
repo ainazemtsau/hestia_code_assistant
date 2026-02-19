@@ -53,6 +53,17 @@ Pending migration must be acknowledged:
    - run `migration-status` and only then continue with normal csk workflow.
    - run `python tools/csk/csk.py reconcile-task-artifacts --strict` (legacy tasks)
    - run `python tools/csk/csk.py reconcile-initiative-artifacts --strict` (legacy initiatives)
+11. `migration-wizard` and finalization:
+   - run `python tools/csk/sync_upstream.py migration-wizard`
+   - in wizard output check:
+     - `command_surface.command_profile.source_commands`, `deployed_before`, `deployed_after`;
+     - `command_surface.command_gaps` (what new functionality is available vs what is still missing for legacy flow);
+     - strategy phases (`module-first`, `mixed`, `initiative-first`) before enabling new initiative features broadly.
+   - read generated strategy before enabling initiative-first features for existing initiatives.
+   - keep module-first process for active legacy tracks.
+   - when migration is accepted, run:
+     - `python tools/csk/sync_upstream.py migration-ack --migration-file <path> --migration-by <name> --migration-notes "..."` if pending.
+     - `python tools/csk/csk.py validate --all --strict` to close post-update loop.
 
 ## Module-specific adaptation
 

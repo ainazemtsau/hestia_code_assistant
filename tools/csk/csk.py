@@ -2896,6 +2896,8 @@ def _validate_sync_pack_migration(repo: Path, strict: bool) -> tuple[List[str], 
         return errors, warnings
 
     migration_path = Path(migration_file)
+    if not migration_path.is_absolute():
+        migration_path = repo / migration_path
     if not migration_path.exists():
         msg = f"migration file missing on disk: {migration_path}"
         if strict:
