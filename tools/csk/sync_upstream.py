@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import math
@@ -466,46 +467,99 @@ def _extract_parser_commands(help_text: str) -> set[str]:
     return commands
 
 
+def _extract_string_constant(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Str):
+        return node.s
+    return None
+
+
 def _extract_parser_commands_from_source(script: Path) -> tuple[set[str], str]:
-    """Extract subcommand names directly from source code."""
+    """Extract subcommand names from source using AST parsing.
+
+    Returns (commands, error). If AST parse fails, falls back to regex extraction.
+    """
     if not script.exists():
         return set(), f"missing: {script}"
+
     try:
         source_text = script.read_text(encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         return set(), f"{script}: failed to read: {exc}"
 
-    pattern = re.compile(r"\.add_parser\(\s*([\"'])(?P<name>.+?)\1")
     commands: set[str] = set()
-    for match in pattern.finditer(source_text):
-        name = match.group("name").strip()
-        if not name or name == "...":
+    try:
+        tree = ast.parse(source_text)
+    except Exception as exc:  # noqa: BLE001
+        pattern = re.compile(r"\.add_parser\(\s*([\"'])(?P<name>.+?)\1")
+        for match in pattern.finditer(source_text):
+            name = match.group("name").strip()
+            if not name or name == "..." or name.startswith("-"):
+                continue
+            commands.add(name)
+
+        if commands:
+            return commands, ""
+
+        return set(), f"{script}: ast parse failed ({exc})"
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
             continue
-        if name.startswith("-"):
+
+        func = node.func
+        if not isinstance(func, ast.Attribute) or func.attr != "add_parser":
+            continue
+
+        arg_value = None
+        if node.args:
+            arg_value = _extract_string_constant(node.args[0])
+        else:
+            for kw in node.keywords:
+                if kw.arg == "name":
+                    arg_value = _extract_string_constant(kw.value)
+                    break
+
+        if not arg_value:
+            continue
+        name = arg_value.strip()
+        if not name or name == "..." or name.startswith("-"):
             continue
         commands.add(name)
-    return commands, ""
+
+    if commands:
+        return commands, ""
+
+    return set(), f"{script}: unable to resolve parser commands from source"
 
 
-def _probe_parser_commands(script: Path, repo_root: Path) -> tuple[set[str], str]:
-    """Return parser commands and optional probe error."""
+def _probe_parser_commands_detailed(script: Path, repo_root: Path) -> tuple[set[str], str, str]:
+    """Return parser commands, optional error and probe mode."""
     source_commands, source_error = _extract_parser_commands_from_source(script)
     if source_commands:
-        return source_commands, ""
+        return source_commands, "", "source-ast"
 
-    if source_error:
-        fallback = source_error
-    else:
-        fallback = ""
+    fallback = source_error or ""
 
     if not script.exists():
-        return set(), fallback or f"missing: {script}"
+        return set(), fallback or f"missing: {script}", "source-missing"
 
     probe = _run([sys.executable, str(script), "-h"], cwd=repo_root)
     if probe.returncode != 0:
-        return set(), fallback or f"{script}: {probe.stderr.strip() or probe.stdout.strip()}"
+        return (
+            set(),
+            fallback or f"{script}: {probe.stderr.strip() or probe.stdout.strip()}",
+            "runtime-help-failed",
+        )
 
-    return _extract_parser_commands(probe.stdout), ""
+    return _extract_parser_commands(probe.stdout), "", "runtime-help"
+
+
+def _probe_parser_commands(script: Path, repo_root: Path) -> tuple[set[str], str]:
+    """Backward-compatible alias with error only."""
+    commands, error, _ = _probe_parser_commands_detailed(script, repo_root)
+    return commands, error
 
 
 def _safe_command_set(raw: Any) -> set[str]:
@@ -1404,6 +1458,162 @@ def _build_wizard_transition_plan(workflow: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_migration_adoption_coaching(
+    state_pack: str,
+    manifest_pack: str,
+    steps: list[dict[str, Any]],
+    workflow: dict[str, Any],
+    command_profile: dict[str, Any],
+) -> dict[str, Any]:
+    source_commands = set(command_profile.get("source_commands", []))
+    deployed_commands = set(command_profile.get("deployed_after", []))
+    command_delta = command_profile.get("command_delta", {})
+
+    has_initiative_in_source = "initiative-new" in source_commands
+    has_initiative_deployed = "initiative-new" in deployed_commands
+
+    new_features: list[dict[str, Any]] = []
+    for step in steps:
+        sid = str(step.get("id", ""))
+        if not sid:
+            continue
+        title = str(step.get("title", sid))
+        summary = str(step.get("summary", step.get("description", "")))
+        actions = [str(a) for a in step.get("actions", []) if isinstance(a, str) and a.strip()]
+        compatibility = [
+            str(a) for a in step.get("compatibility", []) if isinstance(a, str) and a.strip()
+        ]
+        new_features.append(
+            {
+                "id": sid,
+                "title": title,
+                "scope": str(step.get("scope", "global")),
+                "required": bool(step.get("required", True)),
+                "summary": summary,
+                "actions": actions,
+                "compatibility": compatibility,
+                "docs": step.get("docs", ""),
+            }
+        )
+
+    if not new_features:
+        new_features.append(
+            {
+                "id": "noop",
+                "title": "No new migration features",
+                "scope": "global",
+                "required": False,
+                "summary": "No migration steps apply for the current pack transition.",
+                "actions": [],
+                "compatibility": [],
+                "docs": "",
+            }
+        )
+
+    profiles: list[dict[str, Any]] = []
+
+    profiles.append(
+        {
+            "name": "module_first",
+            "applies_when": "Сейчас приоритет на существующем module-first потоке.",
+            "goal": "Сохранить `new-task` и прогнать только обязательные миграционные артефакты.",
+            "condition": "recommended" if workflow.get("task_count", 0) > 0 else "fallback",
+            "commands": [
+                "python tools/csk/sync_upstream.py migration-status --migration-strict",
+                "python tools/csk/sync_upstream.py migration-wizard",
+                "python tools/csk/csk.py reconcile-task-artifacts --strict",
+                "python tools/csk/csk.py validate --all --strict",
+            ],
+        }
+    )
+
+    profiles.append(
+        {
+            "name": "mixed",
+            "applies_when": "Есть крупные cross-module инициативы, но есть много legacy задач.",
+            "goal": "Включать initiative только для больших сквозных работ.",
+            "condition": "strong_candidate" if workflow.get("task_count", 0) > 0 else "default",
+            "commands": [
+                "python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
+                "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
+                "python tools/csk/csk.py initiative-split <I-id> --mode auto",
+                "python tools/csk/csk.py initiative-run <I-id> --next --apply",
+                "python tools/csk/csk.py initiative-status <I-id>",
+                "python tools/csk/csk.py reconcile-task-artifacts --strict",
+                "python tools/csk/csk.py reconcile-initiative-artifacts --strict",
+                "python tools/csk/csk.py validate --all --strict",
+            ],
+        }
+    )
+
+    profiles.append(
+        {
+            "name": "initiative_first",
+            "applies_when": "Команда готова перейти на инициативный слой как стандарт.",
+            "goal": "Вести масштабные изменения через initiative orchestration по-умолчанию.",
+            "condition": "available_now" if has_initiative_in_source and has_initiative_deployed
+            else ("blocked_by_command_surface" if has_initiative_in_source else "not_applicable"),
+            "commands": [
+                "python tools/csk/csk.py initiative-new \"<initiative-title>\" --goal \"...\"",
+                "python tools/csk/csk.py initiative-edit <I-id> --add-milestone \"...\"",
+                "python tools/csk/csk.py initiative-split <I-id> --mode auto",
+                "python tools/csk/csk.py initiative-run <I-id> --next --apply",
+                "python tools/csk/csk.py initiative-status <I-id> --json",
+                "python tools/csk/csk.py reconcile-initiative-artifacts --strict",
+                "python tools/csk/csk.py validate --all --strict",
+            ],
+            "risk": "initiative-new должен присутствовать в deployed CLI до перехода.",
+        }
+    )
+
+    missing_delta = sorted(_safe_command_set(source_commands) - deployed_commands)
+    extra = sorted(_safe_command_set(command_delta.get("extra")))
+    blockers: list[str] = []
+    if missing_delta:
+        blockers.append(
+            "Command surface still misses expected commands from source: "
+            + ", ".join(missing_delta)
+        )
+    if command_delta.get("extra"):
+        blockers.append(
+            "Source and deployed CLI have extra commands; check if they are intentional overlay changes."
+        )
+    if has_initiative_in_source and not has_initiative_deployed:
+        blockers.append(
+            "Source has initiative commands, but deployed CLI lacks initiative-new; do not switch to initiative-first yet."
+        )
+
+    return {
+        "pack_transition": {
+            "from_pack": state_pack,
+            "to_pack": manifest_pack,
+            "source_has_initiative": has_initiative_in_source,
+            "deployed_has_initiative": has_initiative_deployed,
+            "delta_added": sorted(_safe_command_set(command_delta.get("added"))),
+            "delta_removed": sorted(_safe_command_set(command_delta.get("removed"))),
+            "delta_extra": extra,
+            "task_count": workflow.get("task_count", 0),
+            "initiative_count": workflow.get("initiative_count", 0),
+        },
+        "new_features": new_features,
+        "recommended_profile": "module_first" if workflow.get("task_count", 0) >= workflow.get("initiative_count", 0) else "mixed",
+        "adoption_profiles": profiles,
+        "risk_blockers": blockers,
+        "first_steps": [
+            "python tools/csk/sync_upstream.py migration-status --migration-strict",
+            "python tools/csk/sync_upstream.py migration-wizard",
+            "python tools/csk/csk.py reconcile-task-artifacts --strict",
+            "python tools/csk/csk.py reconcile-initiative-artifacts --strict",
+            "python tools/csk/csk.py validate --all --strict",
+        ],
+        "ai_prompt_starters": [
+            "Какие 2-3 инициативы уже реально cross-module и их лучше перевести в initiative-first в текущем квартале?",
+            "Какие legacy задачи можно оставить module-first без риска и почему?",
+            "Какие blockers из command_surface нужно закрыть до того, как ассистент начнет рекомендовать initiative-first flow?",
+        ],
+    }
+
+
 def _build_migration_wizard_payload(
     root: Path,
     manifest_path: Path,
@@ -1512,6 +1722,13 @@ def _build_migration_wizard_payload(
             "command_profile": command_profile,
             "command_gaps": command_gap,
         },
+        "assistant_coaching": _build_migration_adoption_coaching(
+            state_pack=state_pack,
+            manifest_pack=manifest_pack,
+            steps=steps,
+            workflow=workflow,
+            command_profile=command_profile,
+        ),
         "recommendations": {
             "mandatory": mandatory,
             "recommended": recommended,
@@ -1603,8 +1820,352 @@ def _write_migration_wizard_markdown(
             "",
         ]
 
+    coaching = payload.get("assistant_coaching", {})
+    if coaching:
+        lines += ["## AI migration coaching", ""]
+        transition = coaching.get("pack_transition", {})
+        lines.append(
+            f"- Pack transition: {transition.get('from_pack')} -> {transition.get('to_pack')}"
+        )
+        lines.append(f"- Recommended profile: {coaching.get('recommended_profile')}")
+        lines.append(f"- Source has initiative commands: {transition.get('source_has_initiative')}")
+        lines.append(f"- Deployed has initiative commands: {transition.get('deployed_has_initiative')}")
+        lines.append("")
+
+        lines += ["### New features in this transition", ""]
+        for feature in coaching.get("new_features", []):
+            lines.append(f"- [{feature.get('id')}] {feature.get('title')} ({'required' if feature.get('required') else 'optional'})")
+            if feature.get("summary"):
+                lines.append(f"  - {feature.get('summary')}")
+            if feature.get("scope"):
+                lines.append(f"  - scope: {feature.get('scope')}")
+            if feature.get("actions"):
+                lines.append("  - actions:")
+                for act in feature.get("actions", []):
+                    lines.append(f"    - {act}")
+            if feature.get("docs"):
+                lines.append(f"  - docs: {feature.get('docs')}")
+            lines.append("")
+
+        lines += ["### Adoption profiles", ""]
+        for profile in coaching.get("adoption_profiles", []):
+            lines.append(f"- {profile.get('name')}: {profile.get('applies_when')}")
+            lines.append(f"  - goal: {profile.get('goal')}")
+            lines.append(f"  - condition: {profile.get('condition')}")
+            lines.append("  - command plan:")
+            for command in profile.get("commands", []):
+                lines.append(f"    - {command}")
+            if profile.get("risk"):
+                lines.append(f"  - risk: {profile.get('risk')}")
+            lines.append("")
+
+        if coaching.get("risk_blockers"):
+            lines += ["### Risks before profile switch", ""]
+            for item in coaching.get("risk_blockers", []):
+                lines.append(f"- {item}")
+            lines.append("")
+
+        lines += ["### First actions for AI assistant", ""]
+        for command in coaching.get("first_steps", []):
+            lines.append(f"- {command}")
+        lines.append("")
+
+        if coaching.get("ai_prompt_starters"):
+            lines += ["### Ready-to-use AI prompts", ""]
+            for item in coaching.get("ai_prompt_starters", []):
+                lines.append(f"- {item}")
+            lines.append("")
+
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return json_path, md_path
+
+
+def _write_csk_update_session_markdown(
+    root: Path,
+    payload: dict[str, Any],
+) -> tuple[Path, Path]:
+    out = _ensure_report_dir(root)
+    stamp = _now_stamp()
+    json_path = out / f"csk-update-session-{stamp}.json"
+    md_path = out / f"csk-update-session-{stamp}.md"
+
+    _write_json(json_path, payload)
+
+    lines = [
+        "# CSK update session",
+        "",
+        f"Run started: {payload.get('started_at')}",
+        f"Source: {payload.get('source_url')}@{payload.get('source_ref')}",
+        f"Pack: {payload.get('state_pack_version_before')} -> {payload.get('pack_version')}",
+        f"Pack after: {payload.get('state_pack_version_after', 'unknown')}",
+        f"Mode: {payload.get('mode')}",
+        f"Success: {payload.get('success')}",
+        "",
+        "## Update status",
+        f"- plan: {'ok' if payload.get('plan_success') else 'failed'} ({payload.get('plan_report')})",
+        f"- apply/migrate: {'ok' if payload.get('apply_success') else 'failed'} ({payload.get('apply_report')})",
+        f"- migration pending after apply: {payload.get('migration_pending_after', False)}",
+        f"- state pack after: {payload.get('state_pack_version_after', 'unknown')}",
+    ]
+
+    if payload.get("conflicts"):
+        lines.append(f"- conflicts: {payload.get('conflicts')}")
+    if payload.get("plan_checklist"):
+        lines.append(f"- Plan checklist: {payload.get('plan_checklist')}")
+    if payload.get("apply_checklist"):
+        lines.append(f"- Apply checklist: {payload.get('apply_checklist')}")
+    if payload.get("migration_status_report"):
+        lines.append(f"- Migration status report: {payload.get('migration_status_report')}")
+    if payload.get("wizard_report"):
+        lines.append(f"- Migration wizard report: {payload.get('wizard_report')}")
+
+    migration_status = payload.get("migration_status") or {}
+    lines += [
+        "",
+        "## Migration status",
+        f"- Pending: {migration_status.get('pending', False)}",
+        f"- Pending reasons: {len(migration_status.get('reasons', []))}",
+    ]
+    for reason in migration_status.get("reasons", []):
+        lines.append(f"  - {reason}")
+
+    coaching = payload.get("assistant_coaching", {})
+    if coaching:
+        transition = coaching.get("pack_transition", {})
+        lines += [
+            "",
+            "## AI coaching for this transition",
+            f"- Pack transition: {transition.get('from_pack')} -> {transition.get('to_pack')}",
+            f"- Recommended profile: {coaching.get('recommended_profile')}",
+            f"- Source has initiative commands: {transition.get('source_has_initiative')}",
+            f"- Deployed has initiative commands: {transition.get('deployed_has_initiative')}",
+            "- Immediate first steps:",
+        ]
+        for step in coaching.get("first_steps", []):
+            lines.append(f"  - {step}")
+
+    if payload.get("next_actions"):
+        lines += [
+            "",
+            "## Recommended project actions",
+        ]
+        for action in payload.get("next_actions", []):
+            lines.append(f"- {action}")
+
+    if payload.get("command_surface"):
+        surface = payload["command_surface"]
+        lines += [
+            "",
+            "## Command surface snapshot",
+            f"- expected commands: {len(surface.get('expected_commands', []))}",
+            f"- deployed before: {len(surface.get('deployed_before', []))}",
+            f"- deployed after: {len(surface.get('deployed_after', []))}",
+        ]
+
+    if surface := payload.get("command_surface"):
+        if surface.get("source_probe_mode"):
+            lines.append(f"- source probe mode: {surface.get('source_probe_mode')}")
+        if surface.get("deployed_probe_mode_before"):
+            lines.append(f"- deployed probe mode before: {surface.get('deployed_probe_mode_before')}")
+        if surface.get("deployed_probe_mode_after"):
+            lines.append(f"- deployed probe mode after: {surface.get('deployed_probe_mode_after')}")
+        if surface.get("source_probe_error"):
+            lines.append(f"- source probe error: {surface.get('source_probe_error')}")
+        if surface.get("deployed_probe_error_before"):
+            lines.append(f"- deployed probe error before: {surface.get('deployed_probe_error_before')}")
+        if surface.get("deployed_probe_error_after"):
+            lines.append(f"- deployed probe error after: {surface.get('deployed_probe_error_after')}")
+
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return json_path, md_path
+
+
+def _build_post_update_plan(payload: dict[str, Any], migration_status: dict[str, Any]) -> list[str]:
+    migration_file = migration_status.get("last_migration_file")
+    migration_file_clause = (
+        f" --migration-file {migration_file}"
+        if migration_file
+        else " --migration-file <migration-report-path>"
+    )
+    actions = [
+        "python tools/csk/sync_upstream.py migration-status --migration-strict",
+        "python tools/csk/sync_upstream.py migration-wizard",
+        "python tools/csk/csk.py reconcile-task-artifacts --strict",
+        "python tools/csk/csk.py validate --all --strict",
+    ]
+
+    if migration_status.get("pending"):
+        actions.insert(
+            2,
+            "python tools/csk/sync_upstream.py migration-ack --migration-by <name> --migration-notes \"...\""
+            + migration_file_clause,
+        )
+
+    if (
+        payload.get("assistant_coaching", {}).get("pack_transition", {}).get("source_has_initiative")
+        and not payload.get("assistant_coaching", {}).get("pack_transition", {}).get("deployed_has_initiative")
+    ):
+        # Legacy-safe sequencing: reconcile task artifacts first, then initiative artifacts,
+        # avoid surfacing half-migrated initiative command recommendations.
+        actions.insert(-1, "python tools/csk/csk.py reconcile-initiative-artifacts --strict")
+
+    coaching = payload.get("assistant_coaching", {})
+    if coaching.get("first_steps"):
+        actions = list(dict.fromkeys(actions + list(coaching["first_steps"])))
+
+    return actions
+
+
+def run_csk_update(
+    root: Path,
+    source_url: str,
+    source_ref: str,
+    manifest_path: Path,
+    overlay_root: Path,
+    state_path: Path,
+    decision_path: Path,
+    approve_decision: bool,
+    verify: bool,
+    confidence_threshold: float,
+    allow_dirty: bool,
+    run_postchecks: bool = True,
+) -> dict[str, Any]:
+    manifest_obj = _load_manifest_payload(manifest_path)
+    manifest_pack = _manifest_pack_version(manifest_obj)
+    state = _load_json_optional(state_path, default={})
+    state_pack = str(state.get("current_pack_version", "0.0.0"))
+
+    session: dict[str, Any] = {
+        "mode": "csk-update",
+        "started_at": _now_stamp(),
+        "source_url": source_url,
+        "source_ref": source_ref,
+        "pack_version": manifest_pack,
+        "state_pack_version_before": state_pack,
+        "success": False,
+        "steps": ["plan", "apply", "postchecks"],
+        "conflicts": [],
+        "plan_success": False,
+        "apply_success": False,
+        "plan_checklist": None,
+        "apply_checklist": None,
+        "migration_status": {},
+        "migration_status_report": None,
+        "state_pack_version_after": None,
+        "migration_pending_after": False,
+        "wizard_report": None,
+        "wizard_markdown": None,
+        "wizard": {},
+        "assistant_coaching": {},
+        "migration_report": None,
+        "migration_checklist": None,
+        "approved_decision": None,
+        "next_actions": [],
+        "command_surface": {},
+    }
+
+    plan_report = run_plan(
+        root=root,
+        source_url=source_url,
+        source_ref=source_ref,
+        manifest_path=manifest_path,
+        state_path=state_path,
+        top_candidates=DEFAULT_TOP_CANDIDATES,
+    )
+    plan_path = _save_report(root, plan_report)
+    session["plan_report"] = str(plan_path)
+    session["plan_success"] = bool(plan_report.get("success"))
+    if not session["plan_success"]:
+        session["success"] = False
+        session["conflicts"].append("plan_failed")
+        session["finished_at"] = _now_stamp()
+        session["plan_checklist"] = plan_report.get("checklist")
+        return _finalize_csk_update_session(root, session)
+
+    if plan_report.get("checklist"):
+        session["plan_checklist"] = plan_report.get("checklist")
+
+    apply_report = run_apply_or_migrate(
+        mode="migrate",
+        root=root,
+        source_url=source_url,
+        source_ref=source_ref,
+        manifest_path=manifest_path,
+        overlay_root=overlay_root,
+        state_path=state_path,
+        decision_path=decision_path,
+        approve_decision=approve_decision,
+        verify=verify,
+        confidence_threshold=confidence_threshold,
+        allow_dirty=allow_dirty,
+    )
+    apply_path = _save_report(root, apply_report)
+    session["apply_report"] = str(apply_path)
+    session["apply_success"] = bool(apply_report.get("success"))
+    if not session["apply_success"]:
+        session["success"] = False
+        session["conflicts"].append("apply_failed")
+        session["finished_at"] = _now_stamp()
+        session["apply_checklist"] = apply_report.get("checklist")
+        if apply_report.get("command_surface"):
+            session["command_surface"] = apply_report["command_surface"]
+        return _finalize_csk_update_session(root, session)
+
+    if apply_report.get("checklist"):
+        session["apply_checklist"] = apply_report.get("checklist")
+    if apply_report.get("command_surface"):
+        session["command_surface"] = apply_report["command_surface"]
+
+    state_after = _load_json_optional(state_path, default={})
+    session["state_pack_version_after"] = str(state_after.get("current_pack_version", "0.0.0"))
+    session["migration_pending_after"] = bool(state_after.get("migration_pending", False))
+
+    if run_postchecks:
+        migration_status = run_migration_status(
+            root=root,
+            manifest_path=manifest_path,
+            state_path=state_path,
+            strict=False,
+        )
+        migration_status_path = _save_report(root, migration_status)
+        session["migration_status_report"] = str(migration_status_path)
+        session["migration_status"] = migration_status
+
+        wizard_report = run_migration_wizard(root=root, manifest_path=manifest_path, state_path=state_path)
+        wizard_path = _save_report(root, wizard_report)
+        session["wizard_report"] = str(wizard_path)
+        session["wizard"] = wizard_report
+
+        coaching = wizard_report.get("assistant_coaching", {})
+        if coaching:
+            session["assistant_coaching"] = coaching
+
+        if wizard_report.get("command_surface"):
+            session["command_surface"] = wizard_report["command_surface"]
+
+        session["next_actions"] = _build_post_update_plan(wizard_report, migration_status)
+        if migration_status.get("pending"):
+            session["conflicts"].append("migration_pending")
+    else:
+        session["next_actions"] = ["Run migration-status and migration-wizard manually after this session"]
+
+    if apply_report.get("migration_report"):
+        session["migration_report"] = apply_report.get("migration_report")
+    if apply_report.get("migration_checklist"):
+        session["migration_checklist"] = apply_report.get("migration_checklist")
+    if apply_report.get("approved_decision"):
+        session["approved_decision"] = apply_report.get("approved_decision")
+
+    session["success"] = True
+    session["finished_at"] = _now_stamp()
+    return _finalize_csk_update_session(root, session)
+
+
+def _finalize_csk_update_session(root: Path, session: dict[str, Any]) -> dict[str, Any]:
+    session_json, session_md = _write_csk_update_session_markdown(root, session)
+    session["session_report"] = str(session_json)
+    session["session_markdown"] = str(session_md)
+    return session
 
 
 def run_migration_wizard(
@@ -2063,10 +2624,16 @@ def run_apply_or_migrate(
 
             source_csk = source_dir / "tools" / "csk" / "csk.py"
             deployed_csk = root / "tools" / "csk" / "csk.py"
-            expected_commands, expected_error = _probe_parser_commands(source_csk, source_dir)
-            deployed_commands_before, deployed_error_before = _probe_parser_commands(deployed_csk, root)
+            expected_commands, expected_error, expected_probe_mode = _probe_parser_commands_detailed(
+                source_csk, source_dir
+            )
+            deployed_commands_before, deployed_error_before, deployed_probe_mode_before = _probe_parser_commands_detailed(
+                deployed_csk, root
+            )
             deployed_commands_after = set(deployed_commands_before)
             deployed_error_after = deployed_error_before
+            deployed_probe_mode_after = deployed_probe_mode_before
+
             if expected_error:
                 report["verify_errors"].append(
                     f"source csk.py -h probe failed before command-surface check: {expected_error}"
@@ -2086,11 +2653,15 @@ def run_apply_or_migrate(
                             "action": "command-surface-restore",
                             "restored_from": str(source_csk),
                             "missing_commands": sorted(missing_from_deployed),
+                            "probe_mode_before": deployed_probe_mode_before,
                         }
                     )
-                    repaired_commands, repaired_error = _probe_parser_commands(deployed_csk, root)
+                    repaired_commands, repaired_error, repaired_mode = _probe_parser_commands_detailed(
+                        deployed_csk, root
+                    )
                     deployed_commands_after = repaired_commands
                     deployed_error_after = repaired_error
+                    deployed_probe_mode_after = repaired_mode
                     if repaired_error:
                         report["verify_errors"].append(
                             f"deployed csk.py -h probe failed after restore: {repaired_error}"
@@ -2111,6 +2682,9 @@ def run_apply_or_migrate(
                 "source_probe_error": expected_error,
                 "deployed_probe_error_before": deployed_error_before,
                 "deployed_probe_error_after": deployed_error_after,
+                "source_probe_mode": expected_probe_mode,
+                "deployed_probe_mode_before": deployed_probe_mode_before,
+                "deployed_probe_mode_after": deployed_probe_mode_after,
                 "command_delta": {
                     "added": sorted(deployed_commands_after - deployed_commands_before),
                     "removed": sorted(deployed_commands_before - deployed_commands_after),
@@ -2256,6 +2830,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "migration-status",
             "migration-ack",
             "migration-wizard",
+            "csk-update",
         ],
         help="Execution mode. Default is dry-run.",
     )
@@ -2270,13 +2845,18 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--apply", action="store_true", help="Compatibility alias for mode=apply.")
     parser.add_argument("--skip-verify", action="store_true", help="Skip post-apply verification checks.")
     parser.add_argument(
+        "--skip-postchecks",
+        action="store_true",
+        help="Skip csk-update postchecks (migration-status/migration-wizard/reconcile commands).",
+    )
+    parser.add_argument(
         "--decision-file",
-        help="Decision JSON produced/filled by AI assistant. Required for apply/migrate.",
+        help="Decision JSON produced/filled by AI assistant. Required for apply/migrate/csk-update.",
     )
     parser.add_argument(
         "--approve-decision",
         action="store_true",
-        help="Human approval gate. Required for apply/migrate.",
+        help="Human approval gate. Required for apply/migrate/csk-update.",
     )
     parser.add_argument(
         "--migration-file",
@@ -2393,6 +2973,23 @@ def main() -> int:
                 manifest_path=manifest_path,
                 state_path=state_path,
             )
+        elif mode == "csk-update":
+            if not args.decision_file:
+                raise SyncError("csk-update requires --decision-file.")
+            report = run_csk_update(
+                root=root,
+                source_url=args.source_url,
+                source_ref=args.source_ref,
+                manifest_path=manifest_path,
+                overlay_root=overlay_root,
+                state_path=state_path,
+                decision_path=Path(args.decision_file).resolve(),
+                approve_decision=args.approve_decision,
+                verify=not args.skip_verify,
+                confidence_threshold=args.confidence_threshold,
+                allow_dirty=args.allow_dirty,
+                run_postchecks=not args.skip_postchecks,
+            )
         else:
             raise SyncError(f"Unsupported mode: {mode}")
     except Exception as exc:  # noqa: BLE001
@@ -2409,6 +3006,12 @@ def main() -> int:
         print(f"[csk-sync] backup={report['backup_dir']}")
     if report.get("decision_template"):
         print(f"[csk-sync] decision_template={report['decision_template']}")
+    if report.get("session_markdown"):
+        print(f"[csk-sync] csk_update_session={report['session_markdown']}")
+    if report.get("conflicts"):
+        print("[csk-sync] conflicts:")
+        for conflict in report["conflicts"]:
+            print(f"- {conflict}")
     if report.get("checklist"):
         print(f"[csk-sync] checklist={report['checklist']}")
     if report.get("preflight_errors"):
@@ -2425,6 +3028,10 @@ def main() -> int:
         print(f"[csk-sync] migration_wizard_report={report['wizard_report']}")
     if report.get("wizard_markdown"):
         print(f"[csk-sync] migration_wizard={report['wizard_markdown']}")
+    if report.get("next_actions"):
+        print("[csk-sync] recommended_next_actions:")
+        for action in report["next_actions"]:
+            print(f"- {action}")
     if report.get("ack_file"):
         print(f"[csk-sync] migration_ack={report['ack_file']}")
     if report.get("rollback"):

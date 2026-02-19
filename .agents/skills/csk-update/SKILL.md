@@ -14,6 +14,11 @@ Purpose
 Operator flow (always in this order)
 1) Dry-run compatibility check:
 - `python tools/csk/sync_upstream.py`
+- `python tools/csk/sync_upstream.py plan` (если нужен явный промежуточный план)
+
+1b) Рекомендуемый режим для операций «обновил и сразу применил»:
+- `python tools/csk/sync_upstream.py csk-update --source-ref <main|tag> --decision-file <path> --approve-decision`
+
 2) Migration plan + candidate table:
 - `python tools/csk/sync_upstream.py plan`
 3) AI assistant picks backup in decision file:
@@ -31,18 +36,30 @@ Operator flow (always in this order)
   - Review `command_surface.command_gaps` in wizard JSON/MD:
     - что из нового pack уже есть в текущем `csk.py`,
     - что еще нужно ввести или явно зафиксировать как "не используется".
+  - Read wizard `assistant_coaching` block and register:
+    - version transition (`from_pack` → `to_pack`);
+    - new feature cards and why they matter for the project;
+    - recommended rollout profile (`module_first` / `mixed` / `initiative_first`);
+    - blockers before moving initiative-first.
 - Keep `new-task` module workflow valid unless the team intentionally switches to initiative flow in the new rollout.
 - Confirm by:
   - `python tools/csk/sync_upstream.py migration-ack --migration-file <migration-report> --migration-by <name> --migration-notes "..."`
 - Only then continue normal operations.
-7) Post-ack enforcement check:
+7) `csk-update` one-shot completion output:
+- после выполнения `csk-update` скрипт пишет:
+  - `csk_update_session=<path-to-session.md/json>` — полный отчет с версиями `from_pack -> to_pack`, статусом миграции и рекомендованными действиями;
+  - `recommended_next_actions` — готовый список команд в дружелюбном формате для AI assistant/оператора;
+  - `migration_wizard=<path>` при наличии pending миграции.
+- Этот вывод должен быть считан в первую очередь как «план внедрения» — именно из него оператор берет варианты применения новых инициативных фич и блокеры.
+
+8) Post-ack enforcement check:
 - run:
   - `python tools/csk/sync_upstream.py migration-status --migration-strict`
   - `python tools/csk/csk.py reconcile-task-artifacts --strict`
   - `python tools/csk/csk.py reconcile-initiative-artifacts --strict`
   - `python tools/csk/csk.py validate --all --strict`
 - AI assistant must treat failures in this section as blockers for any `approve-ready` path until closed.
-8) Legacy task artifact migration (required for old tasks):
+9) Legacy task artifact migration (required for old tasks):
 - `python tools/csk/csk.py reconcile-task-artifacts --require-block --strict`
 
 Required post-update contract (strict):
@@ -84,6 +101,7 @@ Modes
 - `migration-wizard`: generates phased rollout plan for teams that already execute module tasks.
 - `migration-ack`: marks migration report as acknowledged.
 - `validate`: runs workflow consistency checks (including migration block status).
+- `csk-update`: one-shot mode that runs `plan` -> `migrate` and optional postchecks, and writes `csk-update-session-*.{json,md}`.
 
 If a module cannot use some new feature, this must be explicitly captured in migration notes and module documentation:
 - why the feature is not applicable,

@@ -22,7 +22,18 @@ Retro workflow evolution is stored separately:
    - `python tools/csk/sync_upstream.py`
    - Backward-compatible preview, no writes.
 
-2. `plan`
+2. `csk-update` (recommended operator default)
+   - `python tools/csk/sync_upstream.py csk-update --source-ref main --decision-file <path> --approve-decision`
+   - Performs `plan` and `migrate` in one command.
+   - Writes:
+     - `csk-update-session` artifacts under `.csk-app/reports/`
+     - command and version-aware coaching recommendations in the session markdown.
+   - Typical output section includes:
+     - `csk_update_session=<path>` (machine+human report),
+     - `migration_wizard` path when migration pending,
+     - `recommended_next_actions` list for AI assistant.
+
+3. `plan`
    - `python tools/csk/sync_upstream.py plan`
    - Builds backup candidate table and writes decision template:
      - `.csk-app/sync/decisions/decision-*.json`
@@ -60,11 +71,16 @@ Retro workflow evolution is stored separately:
      - migration playbook: `.csk-app/reports/csk-sync-wizard-*.md`
    - Shows:
      - current workflow compatibility snapshot,
-     - command surface state,
-     - command surface change from migration source,
-     - per-command diff between deployed `csk.py` and migration snapshot (`added`, `removed`, `extra`),
-     - what changed for existing users,
-     - safe rollout phases (`module-first` → `mixed` → `initiative`).
+   - command surface state,
+   - command surface change from migration source,
+   - per-command diff between deployed `csk.py` and migration snapshot (`added`, `removed`, `extra`),
+     - assistant coaching section:
+       - `pack_transition` (`from_pack` → `to_pack`);
+       - new feature cards;
+       - recommended rollout profile (`module_first`, `mixed`, `initiative_first`);
+       - first-actions for AI-assisted rollout (module-first / mixed / initiative-first variants).
+   - what changed for existing users,
+   - safe rollout phases (`module-first` → `mixed` → `initiative`).
    - Use it after any update before mandatory READY flow to pick non-breaking adoption order.
 
 6. `migration-ack`

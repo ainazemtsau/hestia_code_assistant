@@ -58,6 +58,8 @@ Pending migration must be acknowledged:
    - in wizard output check:
      - `command_surface.command_profile.source_commands`, `deployed_before`, `deployed_after`;
      - `command_surface.command_gaps` (what new functionality is available vs what is still missing for legacy flow);
+     - `assistant_coaching.pack_transition` (`from_pack` → `to_pack`) to anchor the decision in version context;
+     - `assistant_coaching.new_features` and `assistant_coaching.adoption_profiles`;
      - strategy phases (`module-first`, `mixed`, `initiative-first`) before enabling new initiative features broadly.
    - read generated strategy before enabling initiative-first features for existing initiatives.
    - keep module-first process for active legacy tracks.
