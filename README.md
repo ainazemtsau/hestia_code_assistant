@@ -1,0 +1,73 @@
+# CSK-Next
+
+CSK-Next v1 reference engine with enforced phase gates, wizard-first planning, and durable task/mission state.
+
+## Quickstart
+
+```bash
+PYTHONPATH=engine/python python -m csk_next.cli.main --root . bootstrap
+PYTHONPATH=engine/python python -m csk_next.cli.main --root . run
+```
+
+`csk run` is the primary user flow. Low-level commands remain available as backend APIs for skills and automation.
+
+## One-Command Flow (`csk run`)
+
+`csk run` executes wizard steps:
+
+1. Intake request capture/classification.
+2. Explicit module mapping confirmation (`module_id:path`), no autodetect.
+3. Execution shape selection (`single` / `multi` / `auto`).
+4. Planning option selection (`A/B/C`).
+5. Materialization confirmation.
+
+Artifacts:
+
+- `.csk/app/wizards/W-####/session.json`
+- `.csk/app/wizards/W-####/events.jsonl`
+- `.csk/app/wizards/W-####/result.json`
+- module task stubs (`plan.md`, `slices.json`, `decisions.jsonl`) and mission stubs when `multi`.
+
+## Approvals and Gates
+
+Task lifecycle:
+
+`draft -> critic_passed -> frozen -> plan_approved -> executing -> ready_validated -> ready_approved -> retro_done -> closed`
+
+Blocking invariants:
+
+- Freeze drift blocks execution and plan approval.
+- Scope gate requires non-empty `allowed_paths` when required.
+- Verify gate requires at least one executed command when required.
+- READY validation requires required gate proofs and profile-derived checks.
+- Retro is blocked until `ready_approved` (or explicit blocked closure path).
+
+## Core Commands
+
+- Bootstrap and routing:
+  - `bootstrap`
+  - `run`
+  - `wizard start|answer|status`
+- Planning/execution:
+  - `task new|critic|freeze|approve-plan|status`
+  - `slice run|mark`
+  - `gate scope-check|verify|record-review|validate-ready|approve-ready`
+- Mission/module:
+  - `module add|init|status`
+  - `mission new|status|spawn-milestone`
+- Operations:
+  - `incident add`
+  - `retro run`
+  - `validate --all --strict`
+  - `doctor run`
+  - `update engine`
+
+## Troubleshooting
+
+- `validate --all --strict`: lifecycle and artifact consistency diagnostics.
+- `doctor run --command <name>`: environment dependency checks.
+- Incident trail:
+  - global: `.csk/app/logs/incidents.jsonl`
+  - module proofs: `<module>/.csk/run/tasks/T-####/proofs/`
+
+See `docs/ops_runbook.md` and `docs/error_catalog.md` for operational procedures and failure modes.

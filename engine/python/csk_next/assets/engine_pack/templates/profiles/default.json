@@ -1,0 +1,14 @@
+{
+  "name": "default",
+  "required_gates": ["scope", "verify", "review"],
+  "e2e": {
+    "required": false,
+    "commands": []
+  },
+  "recommended": {
+    "linters": [],
+    "test_frameworks": [],
+    "skills": ["$csk", "$csk-planner", "$csk-critic", "$csk-coder"],
+    "mcp": []
+  }
+}

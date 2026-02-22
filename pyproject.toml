@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csk-next"
+version = "0.1.0"
+description = "CSK-Next workflow engine"
+requires-python = ">=3.12"
+authors = [{name = "CSK Dev Team"}]
+readme = "README.md"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "mypy>=1.9",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+csk = "csk_next.cli.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "engine/python"}
+
+[tool.setuptools.packages.find]
+where = ["engine/python"]
+
+[tool.pytest.ini_options]
+testpaths = ["engine/python/tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+packages = ["csk_next"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
