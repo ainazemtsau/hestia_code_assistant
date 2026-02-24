@@ -2,6 +2,7 @@
 
 ## Sources
 - `CSK_NEXT_Phase_Spec_RU.md` (draft v0.1, 2026-02-20)
+- `docs/target_spec_delta_v0.1.1.md` (docpack + accepted overrides)
 - User overrides (chat): no auto module detection in v1, module kernels on demand, `module detect` removed, proofs in run/, user-check profile-optional.
 
 ## Requirement Coverage
