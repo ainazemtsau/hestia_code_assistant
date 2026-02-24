@@ -1,0 +1,34 @@
+{
+  "task_id": "{{TASK_ID}}",
+  "module_id": "{{MODULE_ID}}",
+  "slice_id": "{{SLICE_ID}}",
+  "created_at": "{{ISO_TS}}",
+  "gates": {
+    "scope_check": {
+      "status": "PASSED|FAILED",
+      "changed_files": [
+        "..."
+      ],
+      "out_of_scope_files": [
+        "..."
+      ]
+    },
+    "verify": {
+      "status": "PASSED|FAILED",
+      "commands": [
+        {
+          "name": "unit-tests",
+          "cmd": "pytest -q",
+          "exit_code": 0,
+          "log_path": "run/logs/..."
+        }
+      ]
+    }
+  },
+  "artifacts": {
+    "diff_summary": "run/proofs/.../diff.txt",
+    "logs": [
+      "run/logs/..."
+    ]
+  }
+}

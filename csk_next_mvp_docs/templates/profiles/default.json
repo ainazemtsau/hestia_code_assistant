@@ -1,0 +1,20 @@
+{
+  "profile_name": "default",
+  "verify_commands": [
+    {
+      "name": "unit-tests",
+      "argv": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "cwd": "worktree",
+      "timeout_sec": 900
+    }
+  ],
+  "required_gates_default": [
+    "scope-check",
+    "verify"
+  ]
+}

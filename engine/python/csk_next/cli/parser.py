@@ -10,6 +10,10 @@ from csk_next.cli import handlers
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="csk")
     parser.add_argument("--root", default=".", help="Repository root path")
+    parser.add_argument(
+        "--state-root",
+        help="State root path (default: --root or CSK_STATE_ROOT env var)",
+    )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -55,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     module_init_p = module_sub.add_parser("init")
     module_init_p.add_argument("--module-id", required=True)
+    module_init_p.add_argument(
+        "--write-scaffold",
+        action="store_true",
+        help="Write module scaffold files (AGENTS.md, PUBLIC_API.md) into code module",
+    )
     module_init_p.set_defaults(handler=handlers.cmd_module_init)
 
     module_status_p = module_sub.add_parser("status")
@@ -223,10 +232,22 @@ def build_parser() -> argparse.ArgumentParser:
     update_engine_p = update_sub.add_parser("engine")
     update_engine_p.set_defaults(handler=handlers.cmd_update_engine)
 
+    migrate_state_p = sub.add_parser("migrate-state")
+    migrate_state_p.add_argument(
+        "--source-root",
+        help="Source root containing legacy .csk/.agents/AGENTS.md (default: --root)",
+    )
+    migrate_state_p.set_defaults(handler=handlers.cmd_migrate_state)
+
     doctor_p = sub.add_parser("doctor")
     doctor_sub = doctor_p.add_subparsers(dest="doctor_cmd", required=True)
     doctor_run_p = doctor_sub.add_parser("run")
     doctor_run_p.add_argument("--command", action="append", default=[])
+    doctor_run_p.add_argument(
+        "--git-boundary",
+        action="store_true",
+        help="Check for tracked/staged files that should stay outside product Git",
+    )
     doctor_run_p.set_defaults(handler=handlers.cmd_doctor_run)
 
     return parser

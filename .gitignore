@@ -1,0 +1,14 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# CSK runtime state
+.csk/
+**/.csk/
+.agents/
+AGENTS.md
+
+# Build / local tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

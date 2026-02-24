@@ -1,0 +1,7 @@
+{
+  "mission_id": "{{MISSION_ID}}",
+  "selected_modules": [
+    "{{MODULE_ID}}"
+  ],
+  "rationale": "Manual selection or naive keyword match"
+}

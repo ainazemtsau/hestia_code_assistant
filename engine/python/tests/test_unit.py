@@ -20,11 +20,15 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PYTHONPATH = str(REPO_ROOT / "engine" / "python")
 
 
-def run_cli(root: Path, *args: str, expect_code: int = 0) -> dict:
+def run_cli(root: Path, *args: str, expect_code: int = 0, state_root: Path | None = None) -> dict:
     env = dict(os.environ)
     env["PYTHONPATH"] = PYTHONPATH
+    command = [sys.executable, "-m", "csk_next.cli.main", "--root", str(root)]
+    if state_root is not None:
+        command.extend(["--state-root", str(state_root)])
+    command.extend(args)
     proc = subprocess.run(
-        [sys.executable, "-m", "csk_next.cli.main", "--root", str(root), *args],
+        command,
         capture_output=True,
         text=True,
         env=env,
@@ -33,6 +37,10 @@ def run_cli(root: Path, *args: str, expect_code: int = 0) -> dict:
     if proc.returncode != expect_code:
         raise AssertionError(proc.stdout + proc.stderr)
     return json.loads(proc.stdout)
+
+
+def module_state_root(root: Path, module_path: str) -> Path:
+    return root / ".csk" / "modules" / Path(module_path)
 
 
 class UnitTests(unittest.TestCase):
@@ -52,7 +60,7 @@ class UnitTests(unittest.TestCase):
             run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
             run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
 
-            plan = root / "mod" / "app" / ".csk" / "tasks" / task_id / "plan.md"
+            plan = module_state_root(root, "mod/app") / "tasks" / task_id / "plan.md"
             plan.write_text(plan.read_text(encoding="utf-8") + "\nDrift\n", encoding="utf-8")
 
             payload = run_cli(
@@ -87,6 +95,96 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(merged["name"], "python")
         self.assertTrue(merged["e2e"]["required"])
         self.assertIn("e2e", merged["required_gates"])
+
+    def test_module_init_scaffold_opt_in(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+
+            self.assertFalse((root / "modules" / "app" / "AGENTS.md").exists())
+            self.assertFalse((root / "modules" / "app" / "PUBLIC_API.md").exists())
+
+            run_cli(root, "module", "init", "--module-id", "app", "--write-scaffold")
+            self.assertTrue((root / "modules" / "app" / "AGENTS.md").exists())
+            self.assertTrue((root / "modules" / "app" / "PUBLIC_API.md").exists())
+
+    def test_module_add_accepts_absolute_path_inside_repo(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            absolute = (root / "modules" / "app").resolve()
+            added = run_cli(root, "module", "add", "--path", str(absolute), "--module-id", "app")
+            self.assertEqual(added["status"], "ok")
+            self.assertEqual(added["module"]["path"], "modules/app")
+
+    def test_external_state_root_keeps_repo_without_runtime_dirs(self) -> None:
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as state_dir:
+            root = Path(temp_dir)
+            state_root = Path(state_dir) / "state"
+            run_cli(root, "bootstrap", state_root=state_root)
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app", state_root=state_root)
+            run_cli(root, "module", "init", "--module-id", "app", state_root=state_root)
+
+            task = run_cli(root, "task", "new", "--module-id", "app", state_root=state_root)
+            self.assertTrue((state_root / ".csk" / "app" / "registry.json").exists())
+            self.assertFalse((root / ".csk").exists())
+            self.assertTrue(Path(task["task_path"]).exists())
+            self.assertTrue(str(task["task_path"]).startswith(str(state_root / ".csk" / "modules")))
+
+    def test_state_root_from_env(self) -> None:
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as state_dir:
+            root = Path(temp_dir)
+            state_root = Path(state_dir) / "state-from-env"
+            previous = os.environ.get("CSK_STATE_ROOT")
+            try:
+                os.environ["CSK_STATE_ROOT"] = str(state_root)
+                run_cli(root, "bootstrap")
+            finally:
+                if previous is None:
+                    os.environ.pop("CSK_STATE_ROOT", None)
+                else:
+                    os.environ["CSK_STATE_ROOT"] = previous
+
+            self.assertTrue((state_root / ".csk" / "app" / "registry.json").exists())
+            self.assertFalse((root / ".csk").exists())
+
+    def test_migrate_state_copies_legacy_artifacts(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            legacy_file = root / ".csk" / "local" / "skills_override" / "custom" / "SKILL.md"
+            legacy_file.parent.mkdir(parents=True, exist_ok=True)
+            legacy_file.write_text("legacy override\n", encoding="utf-8")
+
+            state_root = root / "control-state"
+            migrated = run_cli(root, "migrate-state", state_root=state_root)
+            self.assertEqual(migrated["status"], "ok")
+            self.assertTrue(migrated["migrated"])
+            self.assertTrue((state_root / ".csk" / "local" / "skills_override" / "custom" / "SKILL.md").exists())
+            self.assertTrue(legacy_file.exists())
+
+    def test_doctor_git_boundary_warn_only(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True, text=True)
+            (root / "README.md").write_text("# repo\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "-c", "user.name=Tester", "-c", "user.email=tester@example.com", "commit", "-m", "init"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            run_cli(root, "bootstrap")
+            doctor = run_cli(root, "doctor", "run", "--git-boundary")
+            self.assertEqual(doctor["status"], "ok")
+            self.assertIsNotNone(doctor["git_boundary"])
+            self.assertFalse(doctor["git_boundary"]["passed"])
+            self.assertGreaterEqual(len(doctor["warnings"]), 1)
 
     def test_skill_generation_override(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -143,7 +241,7 @@ class UnitTests(unittest.TestCase):
             task = run_cli(root, "task", "new", "--module-id", "app")
             task_id = task["task_id"]
 
-            slices_path = root / "mod" / "app" / ".csk" / "tasks" / task_id / "slices.json"
+            slices_path = module_state_root(root, "mod/app") / "tasks" / task_id / "slices.json"
             slices = json.loads(slices_path.read_text(encoding="utf-8"))
             slices["slices"][0]["allowed_paths"] = []
             slices_path.write_text(json.dumps(slices, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -188,7 +286,7 @@ class UnitTests(unittest.TestCase):
             task = run_cli(root, "task", "new", "--module-id", "app")
             task_id = task["task_id"]
 
-            slices_path = root / "mod" / "app" / ".csk" / "tasks" / task_id / "slices.json"
+            slices_path = module_state_root(root, "mod/app") / "tasks" / task_id / "slices.json"
             slices = json.loads(slices_path.read_text(encoding="utf-8"))
             slices["slices"][0]["verify_commands"] = []
             slices_path.write_text(json.dumps(slices, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -283,7 +381,9 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(ready_fail["status"], "failed")
             self.assertFalse(ready_fail["ready"]["checks"]["user_check_recorded"]["passed"])
 
-            user_check_path = root / "mod" / "app" / ".csk" / "tasks" / task_id / "approvals" / "user_check.json"
+            user_check_path = (
+                module_state_root(root, "mod/app") / "tasks" / task_id / "approvals" / "user_check.json"
+            )
             user_check_path.parent.mkdir(parents=True, exist_ok=True)
             user_check_path.write_text(
                 json.dumps({"approved_by": "tester", "approved_at": "2026-02-21T00:00:00Z"}, ensure_ascii=False, indent=2)

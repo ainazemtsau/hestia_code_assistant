@@ -19,9 +19,10 @@ from csk_next.runtime.incidents import log_incident, make_incident
 from csk_next.runtime.intake import classify_request
 from csk_next.runtime.missions import mission_new, mission_status, spawn_milestone
 from csk_next.runtime.modules import module_add, module_init, module_status
-from csk_next.runtime.paths import resolve_layout
+from csk_next.runtime.paths import Layout, resolve_layout
 from csk_next.runtime.proofs import proof_dir
 from csk_next.runtime.retro import run_retro
+from csk_next.runtime.state_migration import migrate_state
 from csk_next.runtime.slices import slice_mark, slice_run
 from csk_next.runtime.tasks import ready_approval_path, task_dir, task_run_dir
 from csk_next.runtime.tasks_engine import (
@@ -36,6 +37,10 @@ from csk_next.runtime.time import utc_now_iso
 from csk_next.runtime.validation import ValidationError, validate_all
 from csk_next.update.engine import update_engine
 from csk_next.wizard.runner import run_wizard, wizard_answer, wizard_start, wizard_status
+
+
+def _layout(args: argparse.Namespace) -> Layout:
+    return resolve_layout(args.root, args.state_root)
 
 
 def _resolve_module(layout, module_id: str) -> dict[str, Any]:
@@ -55,12 +60,12 @@ def _parse_argv(raw: str | None) -> list[str] | None:
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return bootstrap(layout)
 
 
 def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return run_wizard(
         layout=layout,
         request=args.request,
@@ -73,7 +78,7 @@ def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_wizard_start(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     started = wizard_start(layout)
     if args.request:
         session_id = started["wizard"]["session_id"]
@@ -82,32 +87,32 @@ def cmd_wizard_start(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_wizard_answer(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return wizard_answer(layout, args.session_id, args.response)
 
 
 def cmd_wizard_status(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return wizard_status(layout, args.session_id)
 
 
 def cmd_module_add(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return module_add(layout, args.path, args.module_id)
 
 
 def cmd_module_init(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
-    return module_init(layout, args.module_id)
+    layout = _layout(args)
+    return module_init(layout, args.module_id, write_scaffold=args.write_scaffold)
 
 
 def cmd_module_status(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return module_status(layout, args.module_id)
 
 
 def cmd_intake(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     registry = ensure_registry(layout.registry)
     module_candidates = [item["module_id"] for item in registry["modules"]]
     payload = classify_request(args.request, module_candidates)
@@ -115,7 +120,7 @@ def cmd_intake(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_mission_new(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return mission_new(
         layout=layout,
         title=args.title,
@@ -128,12 +133,12 @@ def cmd_mission_new(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_mission_status(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return mission_status(layout=layout, mission_id=args.mission_id)
 
 
 def cmd_mission_spawn(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     parallel_groups = [group.split(",") for group in args.parallel_group]
     return spawn_milestone(
         layout=layout,
@@ -147,7 +152,7 @@ def cmd_mission_spawn(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_task_new(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     return task_new(
         layout=layout,
@@ -161,7 +166,7 @@ def cmd_task_new(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_task_critic(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     return task_record_critic(
         layout=layout,
@@ -177,13 +182,13 @@ def cmd_task_critic(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_task_freeze(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     return task_freeze(layout=layout, module_path=module["path"], task_id=args.task_id)
 
 
 def cmd_task_approve(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     return task_approve_plan(
         layout=layout,
@@ -194,13 +199,13 @@ def cmd_task_approve(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_task_status(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     return task_status(layout=layout, module_path=module["path"], task_id=args.task_id)
 
 
 def cmd_slice_run(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return slice_run(
         layout=layout,
         module_id=args.module_id,
@@ -219,7 +224,7 @@ def cmd_slice_run(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_slice_mark(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return slice_mark(
         layout=layout,
         module_id=args.module_id,
@@ -231,7 +236,7 @@ def cmd_slice_mark(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_gate_scope(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     run_dir = task_run_dir(layout, module["path"], args.task_id)
     proof = check_scope(
@@ -245,7 +250,7 @@ def cmd_gate_scope(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_gate_verify(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     run_dir = task_run_dir(layout, module["path"], args.task_id)
     commands = parse_cmds(args.cmd)
@@ -261,7 +266,7 @@ def cmd_gate_verify(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_gate_review(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     run_dir = task_run_dir(layout, module["path"], args.task_id)
     proof = record_review(
@@ -279,7 +284,7 @@ def cmd_gate_review(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_gate_validate_ready(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     module_path = module["path"]
     task_root = task_dir(layout, module_path, args.task_id)
@@ -300,7 +305,7 @@ def cmd_gate_validate_ready(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_gate_approve_ready(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     module_path = module["path"]
     task_root = task_dir(layout, module_path, args.task_id)
@@ -327,7 +332,7 @@ def cmd_gate_approve_ready(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_incident_add(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     incident = make_incident(
         severity=args.severity,
         kind=args.kind,
@@ -342,12 +347,12 @@ def cmd_incident_add(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_retro_run(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return run_retro(layout, args.module_id, args.task_id, args.feedback)
 
 
 def cmd_validate(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     try:
         return validate_all(layout, strict=args.strict)
     except ValidationError as exc:
@@ -355,10 +360,15 @@ def cmd_validate(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def cmd_update_engine(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
+    layout = _layout(args)
     return update_engine(layout)
 
 
+def cmd_migrate_state(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return migrate_state(layout, source_root=args.source_root)
+
+
 def cmd_doctor_run(args: argparse.Namespace) -> dict[str, Any]:
-    layout = resolve_layout(args.root)
-    return run_doctor(layout, args.command)
+    layout = _layout(args)
+    return run_doctor(layout, args.command, git_boundary=args.git_boundary)

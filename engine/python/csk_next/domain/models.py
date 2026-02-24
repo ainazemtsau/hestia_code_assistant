@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from csk_next.runtime.time import utc_now_iso
@@ -99,12 +99,32 @@ def new_registry() -> Registry:
     )
 
 
+def normalize_module_path(module_path: str) -> str:
+    raw = module_path.strip().replace("\\", "/")
+    if raw in {"", "."}:
+        return "."
+
+    posix_path = PurePosixPath(raw)
+    if posix_path.is_absolute():
+        raise ValueError(f"Module path must be relative: {module_path}")
+
+    parts: list[str] = []
+    for part in posix_path.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError(f"Module path cannot escape repository root: {module_path}")
+        parts.append(part)
+
+    return "/".join(parts) if parts else "."
+
+
 def new_module_record(module_id: str, module_path: str) -> ModuleRecord:
     now = utc_now_iso()
-    normalized = str(Path(module_path).as_posix()).lstrip("./")
+    normalized = normalize_module_path(module_path)
     return ModuleRecord(
         module_id=module_id,
-        path=normalized if normalized else ".",
+        path=normalized,
         initialized=False,
         created_at=now,
         updated_at=now,

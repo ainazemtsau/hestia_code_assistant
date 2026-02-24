@@ -51,7 +51,8 @@ def mission_new(
     if create_worktrees:
         for module_id in module_ids:
             worktree_info = create_module_worktree(
-                repo_root=layout.root,
+                repo_root=layout.repo_root,
+                state_root=layout.state_root,
                 mission_id=mission_id,
                 module_id=module_id,
             )
@@ -80,7 +81,7 @@ def mission_new(
     else:
         for module_id in module_ids:
             worktrees["module_worktrees"][module_id] = str(
-                (layout.root / ".csk" / "worktrees" / mission_id / module_id).as_posix()
+                (layout.csk / "worktrees" / mission_id / module_id).as_posix()
             )
             worktrees["opt_out_modules"].append(module_id)
             worktrees["create_status"][module_id] = {

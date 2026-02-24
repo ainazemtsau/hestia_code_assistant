@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "csk.freeze.schema.json",
+  "type": "object",
+  "required": [
+    "task_id",
+    "module_id",
+    "engine_version",
+    "frozen_at",
+    "plan_sha256",
+    "slices_sha256"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": "string"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "frozen_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plan_sha256": {
+      "type": "string"
+    },
+    "slices_sha256": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,8 @@
+{
+  "task_id": "{{TASK_ID}}",
+  "module_id": "{{MODULE_ID}}",
+  "engine_version": "{{ENGINE_VERSION}}",
+  "frozen_at": "{{ISO_TS}}",
+  "plan_sha256": "{{PLAN_SHA256}}",
+  "slices_sha256": "{{SLICES_SHA256}}"
+}

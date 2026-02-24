@@ -29,7 +29,7 @@
 
 ## Fast Triage
 
-1. Read `.csk/app/logs/incidents.jsonl`.
-2. Inspect task proofs in `<module>/.csk/run/tasks/T-####/proofs/`.
+1. Read `<state-root>/.csk/app/logs/incidents.jsonl`.
+2. Inspect task proofs in `<state-root>/.csk/modules/<module_path>/run/tasks/T-####/proofs/`.
 3. Run `validate --all --strict`.
-4. Run `doctor run` for missing tools.
+4. Run `doctor run` for missing tools and `doctor run --git-boundary` for Git hygiene.

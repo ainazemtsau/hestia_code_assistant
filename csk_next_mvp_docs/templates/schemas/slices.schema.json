@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "csk.slices.schema.json",
+  "type": "object",
+  "required": [
+    "task_id",
+    "module_id",
+    "profile",
+    "slices"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "slices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slice_id",
+          "goal",
+          "allowed_paths",
+          "required_gates",
+          "status"
+        ],
+        "properties": {
+          "slice_id": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "allowed_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required_gates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "TODO",
+              "IN_PROGRESS",
+              "DONE",
+              "BLOCKED"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

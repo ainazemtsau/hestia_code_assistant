@@ -1,0 +1,10 @@
+{
+  "mission_id": "{{MISSION_ID}}",
+  "worktrees": [
+    {
+      "module_id": "{{MODULE_ID}}",
+      "path": ".csk/worktrees/{{MODULE_ID}}",
+      "branch": "csk/{{MISSION_ID}}/{{MODULE_ID}}"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "mission_id": "M-0001",
+  "roadmap": [
+    {
+      "milestone_id": "MS-1",
+      "status": "ACTIVE",
+      "summary": "Deliver API + consumer update",
+      "modules": [
+        "auth",
+        "web"
+      ],
+      "details_level": "DETAILED"
+    },
+    {
+      "milestone_id": "MS-2",
+      "status": "PLANNED",
+      "summary": "Integration tests",
+      "modules": [
+        "auth",
+        "web"
+      ],
+      "details_level": "HIGH_LEVEL"
+    },
+    {
+      "milestone_id": "MS-3",
+      "status": "PLANNED",
+      "summary": "Refactor & docs",
+      "modules": [
+        "auth",
+        "web"
+      ],
+      "details_level": "HIGH_LEVEL"
+    }
+  ]
+}

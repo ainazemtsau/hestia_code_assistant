@@ -5,11 +5,17 @@ CSK-Next v1 reference engine with enforced phase gates, wizard-first planning, a
 ## Quickstart
 
 ```bash
+# same-root mode (legacy-compatible)
 PYTHONPATH=engine/python python -m csk_next.cli.main --root . bootstrap
 PYTHONPATH=engine/python python -m csk_next.cli.main --root . run
+
+# recommended self-host mode (runtime state outside product repo)
+PYTHONPATH=engine/python python -m csk_next.cli.main --root /path/to/product --state-root /path/to/control/state bootstrap
+PYTHONPATH=engine/python python -m csk_next.cli.main --root /path/to/product --state-root /path/to/control/state run
 ```
 
 `csk run` is the primary user flow. Low-level commands remain available as backend APIs for skills and automation.
+`--state-root` can also be provided via `CSK_STATE_ROOT`.
 
 ## One-Command Flow (`csk run`)
 
@@ -23,10 +29,10 @@ PYTHONPATH=engine/python python -m csk_next.cli.main --root . run
 
 Artifacts:
 
-- `.csk/app/wizards/W-####/session.json`
-- `.csk/app/wizards/W-####/events.jsonl`
-- `.csk/app/wizards/W-####/result.json`
-- module task stubs (`plan.md`, `slices.json`, `decisions.jsonl`) and mission stubs when `multi`.
+- `<state-root>/.csk/app/wizards/W-####/session.json`
+- `<state-root>/.csk/app/wizards/W-####/events.jsonl`
+- `<state-root>/.csk/app/wizards/W-####/result.json`
+- module task stubs in `<state-root>/.csk/modules/<module_path>/tasks/T-####/`
 
 ## Approvals and Gates
 
@@ -59,15 +65,17 @@ Blocking invariants:
   - `incident add`
   - `retro run`
   - `validate --all --strict`
-  - `doctor run`
+  - `doctor run [--git-boundary]`
   - `update engine`
+  - `migrate-state`
 
 ## Troubleshooting
 
 - `validate --all --strict`: lifecycle and artifact consistency diagnostics.
 - `doctor run --command <name>`: environment dependency checks.
+- `doctor run --git-boundary`: warn about tracked/pending files that should not go to product Git.
 - Incident trail:
-  - global: `.csk/app/logs/incidents.jsonl`
-  - module proofs: `<module>/.csk/run/tasks/T-####/proofs/`
+  - global: `<state-root>/.csk/app/logs/incidents.jsonl`
+  - module proofs: `<state-root>/.csk/modules/<module_path>/run/tasks/T-####/proofs/`
 
-See `docs/ops_runbook.md` and `docs/error_catalog.md` for operational procedures and failure modes.
+See `docs/ops_runbook.md`, `docs/error_catalog.md`, `docs/git_boundary.md`, and `docs/self_host_workflow.md`.

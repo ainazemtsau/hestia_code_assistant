@@ -1,0 +1,8 @@
+{
+  "mission_id": "M-0001",
+  "selected_modules": [
+    "auth",
+    "web"
+  ],
+  "rationale": "Owner/consumer API change"
+}

@@ -3,18 +3,46 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
+
+
+def _normalize_relative_path(raw: str) -> Path:
+    """Normalize a repo-relative path and reject path escapes."""
+    value = raw.strip().replace("\\", "/")
+    if value in {"", "."}:
+        return Path(".")
+
+    posix_path = PurePosixPath(value)
+    if posix_path.is_absolute():
+        raise ValueError(f"Path must be relative: {raw}")
+
+    parts: list[str] = []
+    for part in posix_path.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError(f"Path cannot escape repository root: {raw}")
+        parts.append(part)
+
+    return Path(*parts) if parts else Path(".")
 
 
 @dataclass(frozen=True)
 class Layout:
     """Resolved project layout."""
 
-    root: Path
+    repo_root: Path
+    state_root: Path
+
+    @property
+    def root(self) -> Path:
+        """Backward-compatible alias for repository root."""
+        return self.repo_root
 
     @property
     def csk(self) -> Path:
-        return self.root / ".csk"
+        return self.state_root / ".csk"
 
     @property
     def engine(self) -> Path:
@@ -54,17 +82,17 @@ class Layout:
 
     @property
     def agents_skills(self) -> Path:
-        return self.root / ".agents" / "skills"
+        return self.state_root / ".agents" / "skills"
 
     @property
     def root_agents(self) -> Path:
-        return self.root / "AGENTS.md"
+        return self.state_root / "AGENTS.md"
 
     def module_root(self, module_path: str) -> Path:
-        return self.root / module_path
+        return self.repo_root / _normalize_relative_path(module_path)
 
     def module_csk(self, module_path: str) -> Path:
-        return self.module_root(module_path) / ".csk"
+        return self.csk / "modules" / _normalize_relative_path(module_path)
 
     def module_kernel(self, module_path: str) -> Path:
         return self.module_csk(module_path) / "module"
@@ -76,8 +104,20 @@ class Layout:
         return self.module_csk(module_path) / "run"
 
 
-def resolve_layout(root: str | Path | None = None) -> Layout:
-    """Resolve layout from explicit root or current working directory."""
-    if root is None:
-        return Layout(Path.cwd())
-    return Layout(Path(root).resolve())
+def resolve_layout(
+    root: str | Path | None = None,
+    state_root: str | Path | None = None,
+) -> Layout:
+    """Resolve layout from explicit root/state-root or current working directory."""
+    repo_root = Path.cwd().resolve() if root is None else Path(root).resolve()
+
+    state_arg = state_root if state_root is not None else os.environ.get("CSK_STATE_ROOT")
+    if state_arg is None:
+        resolved_state_root = repo_root
+    else:
+        candidate = Path(state_arg).expanduser()
+        if not candidate.is_absolute():
+            candidate = repo_root / candidate
+        resolved_state_root = candidate.resolve()
+
+    return Layout(repo_root=repo_root, state_root=resolved_state_root)

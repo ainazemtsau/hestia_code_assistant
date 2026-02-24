@@ -1,0 +1,15 @@
+{
+  "mission_id": "M-0001",
+  "worktrees": [
+    {
+      "module_id": "auth",
+      "path": ".csk/worktrees/auth",
+      "branch": "csk/M-0001/auth"
+    },
+    {
+      "module_id": "web",
+      "path": ".csk/worktrees/web",
+      "branch": "csk/M-0001/web"
+    }
+  ]
+}

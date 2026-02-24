@@ -1,0 +1,28 @@
+{
+  "mission_id": "{{MISSION_ID}}",
+  "roadmap": [
+    {
+      "milestone_id": "MS-1",
+      "status": "ACTIVE",
+      "summary": "First incremental delivery",
+      "modules": [
+        "{{MODULE_ID}}"
+      ],
+      "details_level": "DETAILED"
+    },
+    {
+      "milestone_id": "MS-2",
+      "status": "PLANNED",
+      "summary": "Follow-up",
+      "modules": [],
+      "details_level": "HIGH_LEVEL"
+    },
+    {
+      "milestone_id": "MS-3",
+      "status": "PLANNED",
+      "summary": "Polish",
+      "modules": [],
+      "details_level": "HIGH_LEVEL"
+    }
+  ]
+}

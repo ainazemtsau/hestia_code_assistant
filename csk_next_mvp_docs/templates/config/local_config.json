@@ -1,0 +1,23 @@
+{
+  "default_profile": "default",
+  "worktree_default": true,
+  "command_policy": {
+    "denylist": [
+      "rm",
+      "sudo",
+      "curl",
+      "wget",
+      "powershell",
+      "Invoke-WebRequest"
+    ],
+    "allowlist": []
+  },
+  "redaction": {
+    "enabled": true,
+    "patterns": [
+      "AKIA[0-9A-Z]{16}",
+      "-----BEGIN PRIVATE KEY-----",
+      "password\\s*="
+    ]
+  }
+}

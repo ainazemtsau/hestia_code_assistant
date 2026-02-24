@@ -3,19 +3,19 @@
 ## 1. Bootstrap
 
 ```bash
-PYTHONPATH=engine/python python -m csk_next.cli.main --root <repo> bootstrap
+PYTHONPATH=engine/python python -m csk_next.cli.main --root <repo> --state-root <state> bootstrap
 ```
 
 Expected:
 
-- `.csk/engine`, `.csk/app`, `.csk/local`
-- root `AGENTS.md`
-- generated `.agents/skills/*`
+- `<state>/.csk/engine`, `<state>/.csk/app`, `<state>/.csk/local`
+- `<state>/AGENTS.md`
+- generated `<state>/.agents/skills/*`
 
 ## 2. Primary User Flow
 
 ```bash
-PYTHONPATH=engine/python python -m csk_next.cli.main --root <repo> run
+PYTHONPATH=engine/python python -m csk_next.cli.main --root <repo> --state-root <state> run
 ```
 
 Wizard captures request and explicit module mapping, then materializes:
@@ -68,7 +68,7 @@ READY requires required proofs and profile checks (including optional `user_chec
 ```
 
 Retro is allowed only after `ready_approved` (or blocked closure path).  
-Patch proposals are written only under `.csk/local/patch_proposals/`.
+Patch proposals are written only under `<state>/.csk/local/patch_proposals/`.
 
 ## 7. Validation and Recovery
 
@@ -82,6 +82,13 @@ Doctor diagnostics:
 
 ```bash
 ... doctor run --command <cmd1> --command <cmd2>
+... doctor run --git-boundary
+```
+
+Legacy migration to external state root:
+
+```bash
+... migrate-state --source-root <repo>
 ```
 
 ## 8. Engine Update
@@ -92,10 +99,10 @@ Doctor diagnostics:
 
 Behavior:
 
-1. backup current `.csk/engine`
+1. backup current `<state>/.csk/engine`
 2. replace engine pack
 3. regenerate skills
 4. strict validate
 5. rollback + incident on failure
 
-`.csk/local` is preserved.
+`<state>/.csk/local` is preserved.

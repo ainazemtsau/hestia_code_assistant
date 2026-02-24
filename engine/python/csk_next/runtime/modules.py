@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from csk_next.domain.models import new_module_record
+from csk_next.domain.models import new_module_record, normalize_module_path
 from csk_next.domain.state import ensure_registry, find_module, find_module_by_path, save_registry
 from csk_next.io.files import ensure_dir, write_json, write_text
 from csk_next.runtime.paths import Layout
@@ -18,9 +18,23 @@ def _slugify(value: str) -> str:
     return result or "module"
 
 
+def _normalize_module_input(layout: Layout, module_path: str) -> str:
+    path = Path(module_path).expanduser()
+    if path.is_absolute():
+        resolved = path.resolve()
+        try:
+            relative = resolved.relative_to(layout.repo_root)
+        except ValueError as exc:
+            raise ValueError(
+                f"Module path must be inside repository root: {resolved}"
+            ) from exc
+        return normalize_module_path(relative.as_posix())
+    return normalize_module_path(module_path)
+
+
 def module_add(layout: Layout, module_path: str, module_id: str | None = None) -> dict[str, Any]:
     registry = ensure_registry(layout.registry)
-    normalized = str(Path(module_path).as_posix()).lstrip("./") or "."
+    normalized = _normalize_module_input(layout, module_path)
 
     existing = find_module_by_path(registry, normalized)
     if existing is not None:
@@ -40,7 +54,7 @@ def module_add(layout: Layout, module_path: str, module_id: str | None = None) -
     return {"status": "ok", "module": record, "created": True}
 
 
-def module_init(layout: Layout, module_id: str) -> dict[str, Any]:
+def module_init(layout: Layout, module_id: str, write_scaffold: bool = False) -> dict[str, Any]:
     registry = ensure_registry(layout.registry)
     module = find_module(registry, module_id)
     module_path = module["path"]
@@ -63,19 +77,20 @@ def module_init(layout: Layout, module_id: str) -> dict[str, Any]:
             },
         )
 
-    module_agents = root / "AGENTS.md"
-    if not module_agents.exists():
-        write_text(
-            module_agents,
-            f"# AGENTS.md ({module_id})\n\nUse `$csk` from repository root.\n",
-        )
+    if write_scaffold:
+        module_agents = root / "AGENTS.md"
+        if not module_agents.exists():
+            write_text(
+                module_agents,
+                f"# AGENTS.md ({module_id})\n\nUse `$csk` from repository root.\n",
+            )
 
-    public_api = root / "PUBLIC_API.md"
-    if not public_api.exists():
-        write_text(
-            public_api,
-            f"# PUBLIC API ({module_id})\n\nDocument externally visible contracts here.\n",
-        )
+        public_api = root / "PUBLIC_API.md"
+        if not public_api.exists():
+            write_text(
+                public_api,
+                f"# PUBLIC API ({module_id})\n\nDocument externally visible contracts here.\n",
+            )
 
     module["initialized"] = True
     module["updated_at"] = utc_now_iso()
@@ -86,6 +101,7 @@ def module_init(layout: Layout, module_id: str) -> dict[str, Any]:
         "module_id": module_id,
         "path": module_path,
         "initialized": True,
+        "scaffold_written": write_scaffold,
     }
 
 

@@ -1,0 +1,21 @@
+{
+  "task_id": "{{TASK_ID}}",
+  "module_id": "{{MODULE_ID}}",
+  "profile": "{{PROFILE_NAME}}",
+  "slices": [
+    {
+      "slice_id": "S-01",
+      "goal": "Implement minimal change for milestone-1",
+      "allowed_paths": [
+        "{{MODULE_ROOT_PATH}}/**"
+      ],
+      "required_gates": [
+        "scope-check",
+        "verify"
+      ],
+      "depends_on": [],
+      "status": "TODO",
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "csk.approvals.schema.json",
+  "type": "object",
+  "required": [
+    "task_id",
+    "module_id",
+    "plan",
+    "ready"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": "string"
+    },
+    "plan": {
+      "type": "object",
+      "required": [
+        "approved",
+        "approved_at",
+        "approved_by"
+      ],
+      "properties": {
+        "approved": {
+          "type": "boolean"
+        },
+        "approved_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "approved_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ready": {
+      "type": "object",
+      "required": [
+        "approved",
+        "approved_at",
+        "approved_by"
+      ],
+      "properties": {
+        "approved": {
+          "type": "boolean"
+        },
+        "approved_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "approved_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

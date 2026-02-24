@@ -15,11 +15,20 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PYTHONPATH = str(REPO_ROOT / "engine" / "python")
 
 
-def run_cli(root: Path, *args: str, expect_code: int | None = 0) -> dict:
+def run_cli(
+    root: Path,
+    *args: str,
+    expect_code: int | None = 0,
+    state_root: Path | None = None,
+) -> dict:
     env = dict(os.environ)
     env["PYTHONPATH"] = PYTHONPATH
+    command = [sys.executable, "-m", "csk_next.cli.main", "--root", str(root)]
+    if state_root is not None:
+        command.extend(["--state-root", str(state_root)])
+    command.extend(args)
     proc = subprocess.run(
-        [sys.executable, "-m", "csk_next.cli.main", "--root", str(root), *args],
+        command,
         text=True,
         capture_output=True,
         env=env,
@@ -28,6 +37,10 @@ def run_cli(root: Path, *args: str, expect_code: int | None = 0) -> dict:
     if expect_code is not None and proc.returncode != expect_code:
         raise AssertionError(proc.stdout + proc.stderr)
     return json.loads(proc.stdout)
+
+
+def module_state_root(root: Path, module_path: str) -> Path:
+    return root / ".csk" / "modules" / Path(module_path)
 
 
 def setup_module(root: Path, module_id: str, module_path: str) -> None:
@@ -117,6 +130,31 @@ def ready_and_retro(root: Path, module_id: str, task_id: str) -> None:
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_run_with_external_state_root(self) -> None:
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as state_dir:
+            root = Path(temp_dir)
+            state_root = Path(state_dir) / "state"
+            self.assertEqual(run_cli(root, "bootstrap", state_root=state_root)["status"], "ok")
+
+            payload = run_cli(
+                root,
+                "run",
+                "--request",
+                "Implement scoped change",
+                "--modules",
+                "app:modules/app",
+                "--shape",
+                "single",
+                "--plan-option",
+                "B",
+                "--yes",
+                "--non-interactive",
+                state_root=state_root,
+            )
+            self.assertEqual(payload["status"], "ok")
+            self.assertTrue((state_root / ".csk" / "app" / "registry.json").exists())
+            self.assertFalse((root / ".csk").exists())
+
     def test_run_single_module_planning_entrypoint(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -141,7 +179,7 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(payload["wizard"]["result"]["kind"], "single_module_task")
             artifacts = payload["wizard"]["result"]["artifacts"]
             self.assertTrue(Path(artifacts["task_path"]).exists())
-            self.assertTrue((root / "modules" / "app" / ".csk" / "module" / "kernel.json").exists())
+            self.assertTrue((module_state_root(root, "modules/app") / "module" / "kernel.json").exists())
 
     def test_run_multi_module_routing_and_lazy_init(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -167,8 +205,8 @@ class AcceptanceTests(unittest.TestCase):
             result = payload["wizard"]["result"]
             self.assertEqual(result["kind"], "multi_module_mission")
             self.assertEqual(len(result["artifacts"]["tasks_created"]), 2)
-            self.assertTrue((root / "modules" / "owner" / ".csk" / "module" / "kernel.json").exists())
-            self.assertTrue((root / "modules" / "consumer" / ".csk" / "module" / "kernel.json").exists())
+            self.assertTrue((module_state_root(root, "modules/owner") / "module" / "kernel.json").exists())
+            self.assertTrue((module_state_root(root, "modules/consumer") / "module" / "kernel.json").exists())
 
     def test_acceptance_a_greenfield(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -337,7 +375,7 @@ class AcceptanceTests(unittest.TestCase):
             )
             self.assertEqual(retro["status"], "error")
             self.assertIn("ready_approved or blocked", retro["error"])
-            self.assertFalse((root / "modules" / "app" / ".csk" / "tasks" / task_id / "retro.md").exists())
+            self.assertFalse((module_state_root(root, "modules/app") / "tasks" / task_id / "retro.md").exists())
 
     def test_acceptance_d_failures_and_doctor(self) -> None:
         with TemporaryDirectory() as temp_dir:

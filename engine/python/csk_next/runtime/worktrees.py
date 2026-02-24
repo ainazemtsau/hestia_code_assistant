@@ -11,11 +11,12 @@ from csk_next.io.runner import run_argv
 def create_module_worktree(
     *,
     repo_root: Path,
+    state_root: Path,
     mission_id: str,
     module_id: str,
 ) -> dict[str, object]:
     """Create a worktree for the module, returning status metadata."""
-    target = repo_root / ".csk" / "worktrees" / mission_id / module_id
+    target = state_root / ".csk" / "worktrees" / mission_id / module_id
     ensure_dir(target.parent)
 
     branch = f"csk/{mission_id}/{module_id}"

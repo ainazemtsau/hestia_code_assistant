@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "csk.event.schema.json",
+  "type": "object",
+  "required": [
+    "id",
+    "ts",
+    "type",
+    "actor",
+    "payload",
+    "engine_version"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "type": {
+      "type": "string"
+    },
+    "actor": {
+      "type": "string"
+    },
+    "mission_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "module_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "slice_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repo_git_head": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worktree_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "context_algo_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

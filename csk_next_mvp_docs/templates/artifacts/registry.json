@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "id": "root",
+      "name": "Root",
+      "root_path": ".",
+      "keywords": [
+        "root",
+        "core"
+      ]
+    }
+  ],
+  "root_module_id": "root"
+}
