@@ -30,6 +30,10 @@ def _ensure_local(layout: Layout) -> None:
             config_path,
             {
                 "schema_version": "1.0.0",
+                "default_profile": "default",
+                "worktree_default": True,
+                "allowlist_commands": [],
+                "denylist_commands": ["rm", "sudo", "curl", "wget"],
                 "created_at": utc_now_iso(),
                 "user_check_mode": "profile_optional",
             },
@@ -70,7 +74,17 @@ def _ensure_root_agents(layout: Layout) -> None:
         return
     write_text(
         layout.root_agents,
-        """# AGENTS.md\n\nUse `$csk` as the single entrypoint.\n\nWorkflow phases are enforced by CLI gates.\n""",
+        """# AGENTS.md
+
+1. Start every work session with `csk status --json`.
+2. Prefer user-facing commands (`csk`, `csk new`, `csk run`, `csk approve`, `csk retro`).
+3. Keep module scope strict and avoid out-of-scope edits.
+4. Treat gate failures as blockers and follow suggested remediation.
+5. Record approvals only after reviewing proofs/handoff artifacts.
+6. Run `csk doctor run --git-boundary` before push.
+7. Do not edit generated skills directly under `.agents/skills/`.
+8. Keep local customization changes under `.csk/local/`.
+""",
     )
 
 

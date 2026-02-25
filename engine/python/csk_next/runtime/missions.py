@@ -7,7 +7,9 @@ from typing import Any
 
 from csk_next.domain.models import milestone_stub, mission_routing_stub, mission_stub, worktree_map_stub
 from csk_next.domain.state import ensure_registry, find_module
+from csk_next.eventlog.store import append_event
 from csk_next.io.files import ensure_dir, read_json, write_json, write_text
+from csk_next.runtime.config import worktree_default_enabled
 from csk_next.runtime.ids import next_mission_id
 from csk_next.runtime.incidents import log_incident, make_incident
 from csk_next.runtime.paths import Layout
@@ -46,6 +48,7 @@ def mission_new(
     milestones["milestones"][0]["module_items"] = module_ids
     write_json(mission_dir / "milestones.json", milestones)
 
+    create_worktrees = create_worktrees and worktree_default_enabled(layout)
     worktrees = worktree_map_stub(mission_id)
     worktrees["create_status"] = {}
     if create_worktrees:
@@ -62,6 +65,22 @@ def mission_new(
                 "branch": str(worktree_info["branch"]),
                 "fallback_reason": worktree_info["fallback_reason"],
             }
+            append_event(
+                layout=layout,
+                event_type="worktree.created" if bool(worktree_info["created"]) else "worktree.failed",
+                actor="engine",
+                mission_id=mission_id,
+                module_id=module_id,
+                payload={
+                    "mission_id": mission_id,
+                    "module_id": module_id,
+                    "path": str(worktree_info["path"]),
+                    "branch": str(worktree_info["branch"]),
+                    "created": bool(worktree_info["created"]),
+                    "fallback_reason": worktree_info["fallback_reason"],
+                },
+                artifact_refs=[str(mission_dir / "worktrees.json")],
+            )
             if not bool(worktree_info["created"]):
                 worktrees["opt_out_modules"].append(module_id)
                 incident = make_incident(
@@ -89,6 +108,22 @@ def mission_new(
                 "branch": f"csk/{mission_id}/{module_id}",
                 "fallback_reason": "user_opt_out",
             }
+            append_event(
+                layout=layout,
+                event_type="worktree.skipped",
+                actor="engine",
+                mission_id=mission_id,
+                module_id=module_id,
+                payload={
+                    "mission_id": mission_id,
+                    "module_id": module_id,
+                    "path": worktrees["module_worktrees"][module_id],
+                    "branch": f"csk/{mission_id}/{module_id}",
+                    "created": False,
+                    "fallback_reason": "user_opt_out",
+                },
+                artifact_refs=[str(mission_dir / "worktrees.json")],
+            )
     write_json(mission_dir / "worktrees.json", worktrees)
 
     tasks: list[dict[str, Any]] = []
@@ -105,6 +140,23 @@ def mission_new(
                 plan_template=f"# Plan for {module_id} in {mission_id}\n\n## Goal\n- TODO\n",
             )
             tasks.append(result)
+
+    append_event(
+        layout=layout,
+        event_type="mission.created",
+        actor="engine",
+        mission_id=mission_id,
+        payload={"mission_id": mission_id, "title": title, "module_ids": module_ids},
+        artifact_refs=[str(mission_dir / "mission.json"), str(mission_dir / "spec.md")],
+    )
+    append_event(
+        layout=layout,
+        event_type="milestone.activated",
+        actor="engine",
+        mission_id=mission_id,
+        payload={"mission_id": mission_id, "milestone_id": "MS-0001"},
+        artifact_refs=[str(mission_dir / "milestones.json")],
+    )
 
     return {
         "status": "ok",

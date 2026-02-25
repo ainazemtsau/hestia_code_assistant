@@ -14,8 +14,10 @@ PYTHONPATH=engine/python python -m csk_next.cli.main --root /path/to/product --s
 PYTHONPATH=engine/python python -m csk_next.cli.main --root /path/to/product --state-root /path/to/control/state run
 ```
 
-`csk run` is the primary user flow. Low-level commands remain available as backend APIs for skills and automation.
+Primary user flow commands are `csk`, `csk new`, `csk run`, `csk approve`, `csk module <id>`, `csk retro`, and `csk replay --check`.
+Low-level commands remain available as backend APIs for skills and automation.
 `--state-root` can also be provided via `CSK_STATE_ROOT`.
+Interactive `csk`/`csk module <id>` render `SUMMARY/STATUS/NEXT`; machine mode remains JSON (`csk status --json`).
 
 ## One-Command Flow (`csk run`)
 
@@ -52,10 +54,13 @@ Blocking invariants:
 
 - Bootstrap and routing:
   - `bootstrap`
+  - `new`
   - `run`
+  - `approve`
   - `registry detect`
   - `wizard start|answer|status`
 - Planning/execution:
+  - `plan critic|freeze`
   - `task new|critic|freeze|approve-plan|status`
   - `slice run|mark`
   - `gate scope-check|verify|record-review|validate-ready|approve-ready`
@@ -65,9 +70,14 @@ Blocking invariants:
   - `module list|show|add|init|status`
   - `mission new|status|spawn-milestone`
 - Operations:
+  - `replay --check`
+  - `completion bash|zsh|fish`
+  - `skills generate`
+  - `context build`
+  - `pkm build`
   - `event append|tail`
   - `incident add`
-  - `retro run`
+  - `retro [run]`
   - `validate --all --strict`
   - `doctor run [--git-boundary]`
   - `update engine`
@@ -84,3 +94,8 @@ Blocking invariants:
   - module proofs: `<state-root>/.csk/modules/<module_path>/run/tasks/T-####/proofs/`
 
 See `docs/ops_runbook.md`, `docs/error_catalog.md`, `docs/git_boundary.md`, and `docs/self_host_workflow.md`.
+
+Canonical planning/spec sources:
+- `csk_next_mvp_docpack_v0.1/csk_next_mvp_docs/**`
+- `docs/target_spec_delta_v0.1.1.md`
+- `docs/plan_of_record.md`

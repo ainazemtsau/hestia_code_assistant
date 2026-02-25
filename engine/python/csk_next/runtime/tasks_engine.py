@@ -7,6 +7,7 @@ from typing import Any
 
 from csk_next.domain.models import default_slice_entry, ensure_task_transition, task_state_stub
 from csk_next.domain.schemas import validate_schema
+from csk_next.eventlog.store import append_event
 from csk_next.io.files import ensure_dir, read_json, write_json, write_text
 from csk_next.io.hashing import sha256_text
 from csk_next.io.jsonl import append_jsonl
@@ -55,12 +56,20 @@ def task_new(
     ensure_task_dirs(layout, module_path, task_id)
     task_folder = task_dir(layout, module_path, task_id)
 
-    plan_body = plan_template or (
-        f"# Plan for {task_id}\n\n"
-        "## Scope\n- TODO\n\n"
-        "## Non-scope\n- TODO\n\n"
-        "## Options (A/B/C)\n- A\n- B\n- C\n"
-    )
+    template_path = layout.engine / "templates" / "artifacts" / "plan.md"
+    if plan_template:
+        plan_body = plan_template
+    elif template_path.exists():
+        plan_body = template_path.read_text(encoding="utf-8")
+    else:
+        plan_body = (
+            f"# Plan for {task_id}\n\n"
+            "## Goal\n- TODO\n\n"
+            "## Scope\n- TODO\n\n"
+            "## Non-scope\n- TODO\n\n"
+            "## Checks\n- TODO\n\n"
+            "## Slices\n- S-0001\n"
+        )
     write_text(plan_path(layout, module_path, task_id), plan_body)
 
     slices_doc = {"slices": [default_slice_entry("S-0001")]}
@@ -77,6 +86,33 @@ def task_new(
             "max_attempts": slice_entry.get("max_attempts", max_attempts),
         }
     write_task_state(layout, module_path, task_id, state)
+
+    append_event(
+        layout=layout,
+        event_type="task.created",
+        actor="engine",
+        mission_id=mission_id,
+        module_id=module_id,
+        task_id=task_id,
+        payload={"task_id": task_id, "module_id": module_id, "module_path": module_path},
+        artifact_refs=[str(task_folder / "plan.md"), str(task_folder / "slices.json")],
+    )
+    for slice_entry in slices_doc["slices"]:
+        append_event(
+            layout=layout,
+            event_type="slice.created",
+            actor="engine",
+            mission_id=mission_id,
+            module_id=module_id,
+            task_id=task_id,
+            slice_id=slice_entry["slice_id"],
+            payload={
+                "task_id": task_id,
+                "slice_id": slice_entry["slice_id"],
+                "required_gates": list(slice_entry.get("required_gates", [])),
+            },
+            artifact_refs=[str(task_folder / "slices.json")],
+        )
 
     return {
         "status": "ok",
@@ -112,6 +148,16 @@ def task_record_critic(
     }
     write_json(critic_path(layout, module_path, task_id), payload)
 
+    append_event(
+        layout=layout,
+        event_type="plan.criticized",
+        actor=critic,
+        module_id=state_module_id(layout, module_path),
+        task_id=task_id,
+        payload=payload,
+        artifact_refs=[str(critic_path(layout, module_path, task_id))],
+    )
+
     if payload["passed"]:
         _set_task_status(layout, module_path, task_id, "critic_passed")
 
@@ -136,6 +182,15 @@ def task_freeze(*, layout: Layout, module_path: str, task_id: str) -> dict[str, 
     }
     validate_schema("freeze", payload)
     write_json(freeze_path(layout, module_path, task_id), payload)
+    append_event(
+        layout=layout,
+        event_type="plan.frozen",
+        actor="engine",
+        module_id=state_module_id(layout, module_path),
+        task_id=task_id,
+        payload=payload,
+        artifact_refs=[str(freeze_path(layout, module_path, task_id))],
+    )
 
     _set_task_status(layout, module_path, task_id, "frozen")
     return {"status": "ok", "freeze": payload}
@@ -163,9 +218,29 @@ def task_approve_plan(
     }
     validate_schema("approval", approval)
     write_json(plan_approval_path(layout, module_path, task_id), approval)
+    append_event(
+        layout=layout,
+        event_type="plan.approved",
+        actor=approved_by,
+        module_id=state_module_id(layout, module_path),
+        task_id=task_id,
+        payload=approval,
+        artifact_refs=[str(plan_approval_path(layout, module_path, task_id))],
+    )
 
     _set_task_status(layout, module_path, task_id, "plan_approved")
     return {"status": "ok", "approval": approval}
+
+
+def state_module_id(layout: Layout, module_path: str) -> str | None:
+    registry_path = layout.registry
+    if not registry_path.exists():
+        return None
+    registry = read_json(registry_path)
+    for item in registry.get("modules", []):
+        if str(item.get("path")) == module_path:
+            return str(item.get("module_id"))
+    return None
 
 
 def task_status(*, layout: Layout, module_path: str, task_id: str) -> dict[str, Any]:

@@ -75,7 +75,7 @@ READY requires required proofs and profile checks (including optional `user_chec
 ```
 
 Retro is allowed only after `ready_approved` (or blocked closure path).  
-Patch proposals are written only under `<state>/.csk/local/patch_proposals/`.
+Patch proposals are written only under `<state>/.csk/local/patches/`.
 
 ## 7. Validation and Recovery
 

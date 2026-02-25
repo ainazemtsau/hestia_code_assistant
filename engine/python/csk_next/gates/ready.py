@@ -94,9 +94,7 @@ def validate_ready(
     handoff = {
         "task_id": task_id,
         "summary": "READY handoff generated",
-        "proof_references": {
-            "ready": str(task_run_dir / "proofs" / "ready.json"),
-        },
+        "proof_references": {"ready": str(task_run_dir / "proofs" / "ready.json")},
         "manual_smoke_steps": [
             "Open changed module and run local app/tests.",
             "Validate primary user flow from task plan.",
@@ -104,5 +102,23 @@ def validate_ready(
         ],
         "generated_at": utc_now_iso(),
     }
+    ready_dir = proof_dir(task_run_dir) / "READY"
+    ready_dir.mkdir(parents=True, exist_ok=True)
+    handoff_md = ready_dir / "handoff.md"
+    handoff_text = [
+        f"# READY handoff for {task_id}",
+        "",
+        handoff["summary"],
+        "",
+        "## Proof references",
+        f"- ready: {handoff['proof_references']['ready']}",
+        "",
+        "## Manual smoke steps",
+    ]
+    handoff_text.extend([f"- {step}" for step in handoff["manual_smoke_steps"]])
+    handoff_text.append("")
+    handoff_text.append(f"Generated at: {handoff['generated_at']}")
+    handoff_md.write_text("\n".join(handoff_text) + "\n", encoding="utf-8")
+    handoff["handoff_path"] = str(handoff_md)
     write_json(task_dir / "handoff.json", handoff)
     return proof

@@ -8,7 +8,21 @@ from csk_next.cli import handlers
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="csk")
+    parser = argparse.ArgumentParser(
+        prog="csk",
+        description="CSK-Next control tower CLI",
+        epilog=(
+            "Common flows:\n"
+            "  csk\n"
+            "  csk new \"Implement feature X\" --modules app\n"
+            "  csk run\n"
+            "  csk approve --module-id app --task-id T-0001 --approved-by <human>\n"
+            "  csk module app\n"
+            "  csk replay --check\n"
+            "  csk completion bash"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--root", default=".", help="Repository root path")
     parser.add_argument(
         "--state-root",
@@ -21,6 +35,18 @@ def build_parser() -> argparse.ArgumentParser:
     status_p = sub.add_parser("status")
     status_p.add_argument("--json", action="store_true")
     status_p.set_defaults(handler=handlers.cmd_status)
+
+    new_p = sub.add_parser("new", help="Create a mission/task from user request text")
+    new_p.add_argument("text", help="Mission/task request")
+    new_p.add_argument("--modules", help="Comma-separated module ids (example: app,api)")
+    new_p.add_argument("--profile")
+    new_p.set_defaults(handler=handlers.cmd_new)
+
+    approve_p = sub.add_parser("approve", help="Context approval for plan or READY")
+    approve_p.add_argument("--module-id", required=True)
+    approve_p.add_argument("--task-id", required=True)
+    approve_p.add_argument("--approved-by", required=True)
+    approve_p.set_defaults(handler=handlers.cmd_approve)
 
     run_p = sub.add_parser("run", help="Run the interactive wizard-first workflow")
     run_p.add_argument("--request", help="Optional request text for scripted wizard run")
@@ -88,6 +114,12 @@ def build_parser() -> argparse.ArgumentParser:
     module_status_p.add_argument("--module-id")
     module_status_p.set_defaults(handler=handlers.cmd_module_status)
 
+    worktree_p = sub.add_parser("worktree", help="Worktree utilities")
+    worktree_sub = worktree_p.add_subparsers(dest="worktree_cmd", required=True)
+    worktree_ensure_p = worktree_sub.add_parser("ensure")
+    worktree_ensure_p.add_argument("--mission-id", required=True)
+    worktree_ensure_p.set_defaults(handler=handlers.cmd_worktree_ensure)
+
     mission_p = sub.add_parser("mission")
     mission_sub = mission_p.add_subparsers(dest="mission_cmd", required=True)
 
@@ -150,6 +182,25 @@ def build_parser() -> argparse.ArgumentParser:
     task_status_p.add_argument("--module-id", required=True)
     task_status_p.add_argument("--task-id", required=True)
     task_status_p.set_defaults(handler=handlers.cmd_task_status)
+
+    plan_p = sub.add_parser("plan", help="Plan gate wrappers")
+    plan_sub = plan_p.add_subparsers(dest="plan_cmd", required=True)
+
+    plan_critic_p = plan_sub.add_parser("critic")
+    plan_critic_p.add_argument("--module-id", required=True)
+    plan_critic_p.add_argument("--task-id", required=True)
+    plan_critic_p.add_argument("--critic", default="csk-critic")
+    plan_critic_p.add_argument("--p0", type=int, default=0)
+    plan_critic_p.add_argument("--p1", type=int, default=0)
+    plan_critic_p.add_argument("--p2", type=int, default=0)
+    plan_critic_p.add_argument("--p3", type=int, default=0)
+    plan_critic_p.add_argument("--notes", default="")
+    plan_critic_p.set_defaults(handler=handlers.cmd_task_critic)
+
+    plan_freeze_p = plan_sub.add_parser("freeze")
+    plan_freeze_p.add_argument("--module-id", required=True)
+    plan_freeze_p.add_argument("--task-id", required=True)
+    plan_freeze_p.set_defaults(handler=handlers.cmd_task_freeze)
 
     slice_p = sub.add_parser("slice")
     slice_sub = slice_p.add_subparsers(dest="slice_cmd", required=True)
@@ -269,6 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate_p = sub.add_parser("validate")
     validate_p.add_argument("--all", action="store_true")
     validate_p.add_argument("--strict", action="store_true")
+    validate_p.add_argument("--skills", action="store_true")
     validate_p.set_defaults(handler=handlers.cmd_validate)
 
     update_p = sub.add_parser("update")
@@ -282,6 +334,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Source root containing legacy .csk/.agents/AGENTS.md (default: --root)",
     )
     migrate_state_p.set_defaults(handler=handlers.cmd_migrate_state)
+
+    context_p = sub.add_parser("context", help="Context bundle utilities")
+    context_sub = context_p.add_subparsers(dest="context_cmd", required=True)
+    context_build_p = context_sub.add_parser("build")
+    context_build_p.add_argument("--module-id", "--module", dest="module_id", required=True)
+    context_build_p.add_argument("--task-id", "--task", dest="task_id", required=True)
+    context_build_p.add_argument("--budget", type=int, default=3200)
+    context_build_p.set_defaults(handler=handlers.cmd_context_build)
+
+    pkm_p = sub.add_parser("pkm", help="PKM utilities")
+    pkm_sub = pkm_p.add_subparsers(dest="pkm_cmd", required=True)
+    pkm_build_p = pkm_sub.add_parser("build")
+    pkm_build_p.add_argument("--module-id")
+    pkm_build_p.add_argument("--top-k", type=int, default=5)
+    pkm_build_p.set_defaults(handler=handlers.cmd_pkm_build)
+
+    replay_p = sub.add_parser("replay", help="Replay and invariant checks")
+    replay_p.add_argument("--check", action="store_true")
+    replay_p.set_defaults(handler=handlers.cmd_replay)
+
+    skills_p = sub.add_parser("skills", help="Generated skills utilities")
+    skills_sub = skills_p.add_subparsers(dest="skills_cmd", required=True)
+    skills_generate_p = skills_sub.add_parser("generate")
+    skills_generate_p.set_defaults(handler=handlers.cmd_skills_generate)
+
+    completion_p = sub.add_parser("completion", help="Print shell completion script")
+    completion_p.add_argument("shell", choices=["bash", "zsh", "fish"])
+    completion_p.set_defaults(handler=handlers.cmd_completion)
 
     doctor_p = sub.add_parser("doctor")
     doctor_sub = doctor_p.add_subparsers(dest="doctor_cmd", required=True)

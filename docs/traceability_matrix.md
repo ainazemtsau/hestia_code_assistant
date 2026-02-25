@@ -1,9 +1,9 @@
 # CSK-Next Traceability Matrix
 
 ## Sources
-- `CSK_NEXT_Phase_Spec_RU.md` (draft v0.1, 2026-02-20)
-- `docs/target_spec_delta_v0.1.1.md` (docpack + accepted overrides)
-- User overrides (chat): no automatic module detection in `run` flow; explicit module mapping remains mandatory there.
+- `csk_next_mvp_docpack_v0.1/csk_next_mvp_docs/**`
+- `docs/target_spec_delta_v0.1.1.md` (active overrides)
+- `docs/plan_of_record.md` (active phase status/order)
 
 ## Requirement Coverage
 
@@ -25,7 +25,7 @@
 | R13 | READY validation checklist | `gates/ready.py`, `gate validate-ready` | `test_acceptance_a_greenfield` |
 | R14 | READY human approval | `gate approve-ready` in CLI | `test_acceptance_a_greenfield` |
 | R15 | Retro mandatory artifact | `runtime/retro.py`, `retro run` | `test_acceptance_a_greenfield` |
-| R16 | Retro patches only in local overlay | `runtime/retro.py` writes `.csk/local/patch_proposals` | `test_acceptance_a_greenfield`, `test_retro_denied_before_ready_approval` |
+| R16 | Retro patches only in local overlay | `runtime/retro.py` writes `.csk/local/patches` | `test_acceptance_a_greenfield`, `test_retro_denied_before_ready_approval`, `test_public_cli_flow_with_aliases_and_replay` |
 | R17 | Update replaces engine, preserves local overlay, regenerates skills | `update/engine.py` | `test_acceptance_e_update_and_overlay_preserved` |
 | R18 | Strict validation command | `runtime/validation.py`, `csk validate --all --strict` | `test_acceptance_a_greenfield`, `test_acceptance_c_cross_module_api_change` |
 | R19 | Profile-driven gates/e2e | `profiles/manager.py`, `runtime/slice_executor.py`, `gates/ready.py` | `test_profile_merge`, `test_ready_uses_local_profile_override` |
@@ -46,8 +46,17 @@
 | R34 | Bootstrap auto-runs registry detect only when registry is empty | `runtime/bootstrap.py`, `runtime/modules.py` | `test_bootstrap_runs_registry_detect_when_empty`, `test_registry_detect_fallback_root_module` |
 | R35 | Root status projection from SSOT state with `csk` (no args) aliasing `status` | `runtime/status.py`, `cli/parser.py`, `cli/handlers.py` | `test_status_alias_without_command_and_phase_projection` |
 | R36 | Module dashboard (`csk module <id>`) exposes phase/task/slice, NEXT, and `cd` hint when worktree mapping exists | `cli/main.py`, `runtime/status.py`, `cli/handlers.py` | `test_module_alias_dashboard_and_cd_hint` |
+| R37 | Public context-aware approval command (`csk approve`) routes to plan or READY approval by task status | `cli/handlers.py::cmd_approve` | `test_public_cli_flow_with_aliases_and_replay` |
+| R38 | Retro alias supports `csk retro --module-id ... --task-id ...` | `cli/main.py::_rewrite_user_aliases`, `cli/parser.py` | `test_retro_alias_without_subcommand`, `test_public_cli_flow_with_aliases_and_replay` |
+| R39 | Context bundle generation with lexical retrieval, provenance, freshness, and event emission | `runtime/context_builder.py`, `cli/handlers.py::cmd_context_build` | `test_public_cli_flow_with_aliases_and_replay` |
+| R40 | PKM build from `verify.passed` evidence and context integration support | `runtime/pkm.py`, `runtime/slice_executor.py` | `test_public_cli_flow_with_aliases_and_replay` |
+| R41 | Replay invariant checker with exit code `30` and replay events | `runtime/replay.py`, `cli/handlers.py::cmd_replay`, `cli/main.py` | `test_replay_exit_code_30_on_invariant_violation`, `test_public_cli_flow_with_aliases_and_replay` |
+| R42 | Shell completion generation (`bash|zsh|fish`) and install guide | `cli/handlers.py::cmd_completion`, `examples/INSTALL_COMPLETION.md` | `test_completion_prints_raw_script` |
+| R43 | Generated skills drift validation via `validate --skills` | `skills/generator.py::validate_generated_skills`, `cli/handlers.py::cmd_validate` | `test_validate_skills_detects_drift` |
+| R44 | Text-mode `SUMMARY/STATUS/NEXT` rendering for interactive root/module dashboards while preserving JSON output for automation | `cli/main.py` (`_print_status_text`, `_print_module_text`) | covered by manual smoke; JSON compatibility validated by full unittest suite |
 
 ## Coverage Status
 
 - Recovery gaps RB-001..RB-011 are implemented and covered by tests.
+- Public migration contract (`new/run/approve/module/retro/replay/completion`) is implemented with compatibility aliases retained.
 - `user-check` remains profile-optional by default and becomes mandatory only when profile sets `user_check_required=true`.

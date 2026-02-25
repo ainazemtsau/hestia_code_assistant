@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from csk_next.domain.schemas import validate_schema
-from csk_next.io.files import ensure_dir, read_json, read_text, write_json
+from csk_next.io.files import ensure_dir, read_json, read_text, write_json, write_text
 from csk_next.io.hashing import sha256_text
 from csk_next.runtime.paths import Layout
 from csk_next.runtime.time import utc_now_iso
@@ -51,7 +51,13 @@ def critic_path(layout: Layout, module_path: str, task_id: str) -> Path:
 def ensure_task_dirs(layout: Layout, module_path: str, task_id: str) -> None:
     ensure_dir(task_dir(layout, module_path, task_id))
     ensure_dir(task_run_dir(layout, module_path, task_id))
+    ensure_dir(task_run_dir(layout, module_path, task_id) / "proofs")
+    ensure_dir(task_run_dir(layout, module_path, task_id) / "logs")
+    ensure_dir(task_run_dir(layout, module_path, task_id) / "context")
     ensure_dir(task_dir(layout, module_path, task_id) / "approvals")
+    incidents = task_dir(layout, module_path, task_id) / "incidents.jsonl"
+    if not incidents.exists():
+        write_text(incidents, "")
 
 
 def read_task_state(layout: Layout, module_path: str, task_id: str) -> dict[str, Any]:

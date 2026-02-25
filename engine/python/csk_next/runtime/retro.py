@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Any
 
 from csk_next.domain.state import ensure_registry, find_module
+from csk_next.eventlog.store import append_event
 from csk_next.io.files import ensure_dir, write_text
 from csk_next.io.jsonl import read_jsonl
 from csk_next.runtime.paths import Layout
@@ -72,18 +73,36 @@ def run_retro(layout: Layout, module_id: str, task_id: str, feedback: str) -> di
     )
     write_text(task_root / "retro.md", "\n".join(lines) + "\n")
 
-    patch_dir = layout.local / "patch_proposals"
+    patch_dir = layout.local / "patches"
     ensure_dir(patch_dir)
+    patch_file = patch_dir / f"{task_id}-{state['updated_at'].replace(':', '').replace('-', '')}.md"
     write_text(
-        patch_dir / f"{task_id}.md",
+        patch_file,
         "# Local patch proposals\n\n- Tune profile verify commands.\n- Improve skill prompts.\n",
     )
 
     mark_task_status(layout, module_path, task_id, "retro_done")
+    retro_file = str(task_root / "retro.md")
+    patch_file_str = str(patch_file)
+    append_event(
+        layout=layout,
+        event_type="retro.completed",
+        actor="engine",
+        module_id=module_id,
+        task_id=task_id,
+        payload={
+            "task_id": task_id,
+            "incidents": len(related),
+            "retro_file": retro_file,
+            "patch_file": patch_file_str,
+        },
+        artifact_refs=[retro_file, patch_file_str],
+    )
 
     return {
         "status": "ok",
         "task_id": task_id,
         "incidents": len(related),
-        "retro_file": str(task_root / "retro.md"),
+        "retro_file": retro_file,
+        "patch_file": patch_file_str,
     }

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from csk_next.domain.state import ensure_registry, find_module, find_module_by_path
+from csk_next.domain.state import ensure_registry, find_module
+from csk_next.runtime.config import load_local_config
 from csk_next.runtime.intake import classify_request
 from csk_next.runtime.missions import mission_new
 from csk_next.runtime.modules import module_add, module_init
@@ -80,6 +81,10 @@ def _materialize(layout: Layout, session_id: str, context: dict[str, Any]) -> di
     shape = str(context.get("shape", "single"))
     option = str(context.get("planning_option", "B"))
 
+    local_config = load_local_config(layout)
+    default_profile = str(local_config.get("default_profile", "default"))
+    worktree_default = bool(local_config.get("worktree_default", True))
+
     if shape == "single":
         module_id = selected_modules[0]
         registry = ensure_registry(layout.registry)
@@ -89,7 +94,7 @@ def _materialize(layout: Layout, session_id: str, context: dict[str, Any]) -> di
             module_id=module_id,
             module_path=module["path"],
             mission_id=None,
-            profile="default",
+            profile=default_profile,
             max_attempts=2,
             plan_template=(
                 f"# Plan ({option})\n\n"
@@ -125,9 +130,9 @@ def _materialize(layout: Layout, session_id: str, context: dict[str, Any]) -> di
         title=title,
         summary=summary,
         module_ids=selected_modules,
-        create_worktrees=True,
+        create_worktrees=worktree_default,
         create_task_stubs=True,
-        profile="default",
+        profile=default_profile,
     )
     payload = {
         "kind": "multi_module_mission",

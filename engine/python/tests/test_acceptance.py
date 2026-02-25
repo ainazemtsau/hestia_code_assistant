@@ -269,7 +269,7 @@ class AcceptanceTests(unittest.TestCase):
                 "--modules",
                 "ghost",
                 "--no-task-stubs",
-                expect_code=1,
+                expect_code=2,
             )
             self.assertEqual(payload["status"], "error")
             self.assertIn("Module not found", payload["error"])
@@ -347,7 +347,7 @@ class AcceptanceTests(unittest.TestCase):
                 "app",
                 "--task-id",
                 task_id,
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(ready["status"], "failed")
             self.assertFalse(ready["ready"]["checks"]["verify_coverage_ok"]["passed"])
@@ -371,7 +371,7 @@ class AcceptanceTests(unittest.TestCase):
                 "app",
                 "--task-id",
                 task_id,
-                expect_code=1,
+                expect_code=2,
             )
             self.assertEqual(retro["status"], "error")
             self.assertIn("ready_approved or blocked", retro["error"])
@@ -400,7 +400,7 @@ class AcceptanceTests(unittest.TestCase):
                 "S-0001",
                 "--verify-cmd",
                 fail_cmd,
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(first["status"], "gate_failed")
 
@@ -416,7 +416,7 @@ class AcceptanceTests(unittest.TestCase):
                 "S-0001",
                 "--verify-cmd",
                 fail_cmd,
-                expect_code=1,
+                expect_code=10,
             )
             self.assertIn(second["status"], {"gate_failed", "blocked"})
 
@@ -430,16 +430,91 @@ class AcceptanceTests(unittest.TestCase):
                 task_id,
                 "--slice-id",
                 "S-0001",
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(third["status"], "blocked")
 
-            doctor = run_cli(root, "doctor", "run", "--command", "definitely_missing_cmd", expect_code=1)
+            doctor = run_cli(root, "doctor", "run", "--command", "definitely_missing_cmd", expect_code=10)
             self.assertEqual(doctor["status"], "failed")
 
             incidents = (root / ".csk" / "app" / "logs" / "incidents.jsonl").read_text(encoding="utf-8")
             self.assertIn("verify_fail", incidents)
             self.assertIn("command_not_found", incidents)
+
+    def test_public_cli_flow_with_aliases_and_replay(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            setup_module(root, "app", "modules/app")
+
+            created = run_cli(root, "new", "Implement API hardening", "--modules", "app")
+            self.assertEqual(created["status"], "ok")
+            self.assertEqual(created["kind"], "single_module_task")
+            task_id = created["task_id"]
+
+            self.assertEqual(
+                run_cli(root, "plan", "critic", "--module-id", "app", "--task-id", task_id)["status"],
+                "ok",
+            )
+            self.assertEqual(
+                run_cli(root, "plan", "freeze", "--module-id", "app", "--task-id", task_id)["status"],
+                "ok",
+            )
+
+            plan_approval = run_cli(
+                root,
+                "approve",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--approved-by",
+                "tester",
+            )
+            self.assertEqual(plan_approval["status"], "ok")
+            self.assertEqual(plan_approval["kind"], "plan")
+
+            run_first = run_cli(root, "run")
+            self.assertEqual(run_first["status"], "done")
+
+            run_second = run_cli(root, "run")
+            self.assertEqual(run_second["status"], "ok")
+
+            ready_approval = run_cli(
+                root,
+                "approve",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--approved-by",
+                "tester",
+            )
+            self.assertEqual(ready_approval["status"], "ok")
+            self.assertEqual(ready_approval["kind"], "ready")
+
+            retro = run_cli(
+                root,
+                "retro",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+            )
+            self.assertEqual(retro["status"], "ok")
+            self.assertTrue(Path(retro["patch_file"]).exists())
+
+            context = run_cli(root, "context", "build", "--module-id", "app", "--task-id", task_id)
+            self.assertEqual(context["status"], "ok")
+            self.assertTrue(Path(context["bundle_path"]).exists())
+
+            pkm = run_cli(root, "pkm", "build", "--module-id", "app")
+            self.assertEqual(pkm["status"], "ok")
+            self.assertGreaterEqual(pkm["items_written"], 1)
+
+            replay = run_cli(root, "replay", "--check")
+            self.assertEqual(replay["status"], "ok")
+            self.assertEqual(replay["replay"]["status"], "ok")
 
     def test_acceptance_e_update_and_overlay_preserved(self) -> None:
         with TemporaryDirectory() as temp_dir:

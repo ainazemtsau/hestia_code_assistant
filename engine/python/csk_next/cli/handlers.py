@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import sys
 from typing import Any
 
 from csk_next.doctor.run import run_doctor
@@ -15,8 +16,11 @@ from csk_next.gates.review import record_review
 from csk_next.gates.scope import check_scope
 from csk_next.gates.verify import parse_cmds, run_verify
 from csk_next.io.files import read_json, write_json
+from csk_next.io.runner import run_argv
 from csk_next.profiles.manager import load_profile_from_paths
 from csk_next.runtime.bootstrap import bootstrap
+from csk_next.runtime.config import command_policy, load_local_config, worktree_default_enabled
+from csk_next.runtime.context_builder import build_context_bundle
 from csk_next.runtime.incidents import log_incident, make_incident
 from csk_next.runtime.intake import classify_request
 from csk_next.runtime.missions import mission_new, mission_status, spawn_milestone
@@ -28,8 +32,10 @@ from csk_next.runtime.modules import (
     module_status,
     registry_detect,
 )
+from csk_next.runtime.pkm import build_pkm
 from csk_next.runtime.paths import Layout, resolve_layout
 from csk_next.runtime.proofs import proof_dir
+from csk_next.runtime.replay import replay_check
 from csk_next.runtime.retro import run_retro
 from csk_next.runtime.state_migration import migrate_state
 from csk_next.runtime.status import project_module_status, project_root_status
@@ -45,6 +51,8 @@ from csk_next.runtime.tasks_engine import (
 )
 from csk_next.runtime.time import utc_now_iso
 from csk_next.runtime.validation import ValidationError, validate_all
+from csk_next.runtime.worktrees import ensure_worktrees_for_mission
+from csk_next.skills.generator import generate_skills, validate_generated_skills
 from csk_next.update.engine import update_engine
 from csk_next.wizard.runner import run_wizard, wizard_answer, wizard_start, wizard_status
 
@@ -69,6 +77,17 @@ def _parse_argv(raw: str | None) -> list[str] | None:
     return argv
 
 
+def _parse_module_ids(raw: str | None) -> list[str]:
+    if raw is None:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _task_state(layout: Layout, module_id: str, task_id: str) -> dict[str, Any]:
+    module = _resolve_module(layout, module_id)
+    return read_json(task_dir(layout, module["path"], task_id) / "task.json")
+
+
 def cmd_bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     return bootstrap(layout)
@@ -79,8 +98,111 @@ def cmd_status(args: argparse.Namespace) -> dict[str, Any]:
     return project_root_status(layout)
 
 
+def cmd_new(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    registry = ensure_registry(layout.registry)
+    module_ids = _parse_module_ids(args.modules)
+    if not module_ids:
+        if len(registry["modules"]) == 1:
+            module_ids = [str(registry["modules"][0]["module_id"])]
+        elif any(str(item["module_id"]) == "root" for item in registry["modules"]):
+            module_ids = ["root"]
+        else:
+            raise ValueError("Multiple modules detected; provide --modules module1,module2")
+
+    config = load_local_config(layout)
+    profile = args.profile or str(config.get("default_profile", "default"))
+    create_worktrees = worktree_default_enabled(layout)
+    if len(module_ids) == 1:
+        module = _resolve_module(layout, module_ids[0])
+        payload = task_new(
+            layout=layout,
+            module_id=module_ids[0],
+            module_path=module["path"],
+            mission_id=None,
+            profile=profile,
+            max_attempts=2,
+            plan_template=f"# Plan\n\n## Goal\n- {args.text}\n\n## Scope\n- TODO\n\n## Non-scope\n- TODO\n",
+        )
+        payload["kind"] = "single_module_task"
+        return payload
+
+    title = args.text[:96]
+    mission = mission_new(
+        layout=layout,
+        title=title,
+        summary=args.text,
+        module_ids=module_ids,
+        create_worktrees=create_worktrees,
+        create_task_stubs=True,
+        profile=profile,
+    )
+    mission["kind"] = "multi_module_mission"
+    return mission
+
+
+def cmd_approve(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    state = _task_state(layout, args.module_id, args.task_id)
+    status = str(state.get("status", ""))
+    if status == "frozen":
+        result = cmd_task_approve(args)
+        return {"status": "ok", "kind": "plan", "result": result}
+    if status == "ready_validated":
+        result = cmd_gate_approve_ready(args)
+        return {"status": "ok", "kind": "ready", "result": result}
+    raise ValueError(f"approve is not valid for task status '{status}'")
+
+
 def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
+    scripted = any([args.request, args.modules, args.shape, args.plan_option, args.yes, args.non_interactive])
+    if not scripted:
+        status = project_root_status(layout)
+        for module in status.get("modules", []):
+            if module.get("phase") == "EXECUTING" and module.get("active_task_id"):
+                task_id = str(module["active_task_id"])
+                module_id = str(module["module_id"])
+                slice_id = str(module.get("active_slice_id") or "S-0001")
+                task_state = _task_state(layout, module_id, task_id)
+                slices = task_state.get("slices", {})
+                if isinstance(slices, dict) and slices and all(
+                    isinstance(row, dict) and row.get("status") == "done" for row in slices.values()
+                ):
+                    gate_args = argparse.Namespace(
+                        root=args.root,
+                        state_root=args.state_root,
+                        module_id=module_id,
+                        task_id=task_id,
+                    )
+                    return cmd_gate_validate_ready(gate_args)
+                return slice_run(
+                    layout=layout,
+                    module_id=module_id,
+                    task_id=task_id,
+                    slice_id=slice_id,
+                    implement_cmd=None,
+                    verify_cmds_raw=[],
+                    e2e_cmds_raw=[],
+                    reviewer="csk-reviewer",
+                    p0=0,
+                    p1=0,
+                    p2=0,
+                    p3=0,
+                    review_notes="",
+                )
+        if sys.stdin.isatty():
+            return run_wizard(
+                layout=layout,
+                request=args.request,
+                modules=args.modules,
+                shape=args.shape,
+                plan_option=args.plan_option,
+                auto_confirm=args.yes,
+                non_interactive=args.non_interactive,
+            )
+        return wizard_start(layout)
+
     return run_wizard(
         layout=layout,
         request=args.request,
@@ -138,6 +260,37 @@ def cmd_module_status(args: argparse.Namespace) -> dict[str, Any]:
     return project_module_status(layout, args.module_id)
 
 
+def cmd_worktree_ensure(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    mission_dir = layout.missions / args.mission_id
+    if not mission_dir.exists():
+        raise FileNotFoundError(f"Mission not found: {args.mission_id}")
+    result = ensure_worktrees_for_mission(
+        repo_root=layout.repo_root,
+        state_root=layout.state_root,
+        mission_dir=mission_dir,
+    )
+    worktrees = read_json(mission_dir / "worktrees.json")
+    for module_id, status in worktrees.get("create_status", {}).items():
+        append_event(
+            layout=layout,
+            event_type="worktree.created" if bool(status.get("created")) else "worktree.failed",
+            actor="engine",
+            mission_id=args.mission_id,
+            module_id=str(module_id),
+            payload={
+                "mission_id": args.mission_id,
+                "module_id": module_id,
+                "created": bool(status.get("created")),
+                "branch": status.get("branch"),
+                "fallback_reason": status.get("fallback_reason"),
+                "path": worktrees.get("module_worktrees", {}).get(module_id),
+            },
+            artifact_refs=[str(mission_dir / "worktrees.json")],
+        )
+    return result
+
+
 def cmd_intake(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     registry = ensure_registry(layout.registry)
@@ -153,12 +306,13 @@ def cmd_registry_detect(args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_mission_new(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
+    create_worktrees = (not args.no_worktree) and worktree_default_enabled(layout)
     return mission_new(
         layout=layout,
         title=args.title,
         summary=args.summary,
         module_ids=args.modules,
-        create_worktrees=not args.no_worktree,
+        create_worktrees=create_worktrees,
         create_task_stubs=not args.no_task_stubs,
         profile=args.profile,
     )
@@ -271,12 +425,31 @@ def cmd_gate_scope(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     module = _resolve_module(layout, args.module_id)
     run_dir = task_run_dir(layout, module["path"], args.task_id)
+    changed = list(args.changed)
+    if not changed:
+        diff = run_argv(["git", "-C", str(layout.module_root(module["path"])), "diff", "--name-only"], check=False)
+        if diff.returncode == 0:
+            changed = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
     proof = check_scope(
         task_id=args.task_id,
         slice_id=args.slice_id,
         task_run_dir=run_dir,
-        changed=args.changed,
+        changed=changed,
         allowed_paths=args.allowed_path,
+    )
+    append_event(
+        layout=layout,
+        event_type="scope.check.passed" if bool(proof["passed"]) else "scope.check.failed",
+        actor="engine",
+        module_id=args.module_id,
+        task_id=args.task_id,
+        slice_id=args.slice_id,
+        payload={
+            "passed": bool(proof["passed"]),
+            "changed_count": len(changed),
+            "violations": list(proof.get("violations", [])),
+        },
+        artifact_refs=[str(run_dir / "proofs" / args.slice_id / "scope.json")],
     )
     return {"status": "ok" if proof["passed"] else "failed", "proof": proof}
 
@@ -286,6 +459,7 @@ def cmd_gate_verify(args: argparse.Namespace) -> dict[str, Any]:
     module = _resolve_module(layout, args.module_id)
     run_dir = task_run_dir(layout, module["path"], args.task_id)
     commands = parse_cmds(args.cmd)
+    allowlist, denylist = command_policy(layout)
     proof = run_verify(
         task_id=args.task_id,
         slice_id=args.slice_id,
@@ -293,6 +467,23 @@ def cmd_gate_verify(args: argparse.Namespace) -> dict[str, Any]:
         cwd=layout.module_root(module["path"]),
         commands=commands,
         require_at_least_one=True,
+        allowlist=allowlist,
+        denylist=denylist,
+    )
+    append_event(
+        layout=layout,
+        event_type="verify.passed" if bool(proof["passed"]) else "verify.failed",
+        actor="engine",
+        module_id=args.module_id,
+        task_id=args.task_id,
+        slice_id=args.slice_id,
+        payload={
+            "cmd": " && ".join(" ".join(item.get("argv", [])) for item in proof.get("commands", [])),
+            "executed_count": int(proof.get("executed_count", 0)),
+            "duration_ms": int(proof.get("duration_ms", 0)),
+            "log_path": proof.get("log_path"),
+        },
+        artifact_refs=[str(run_dir / "proofs" / args.slice_id / "verify.json"), str(proof.get("log_path", ""))],
     )
     return {"status": "ok" if proof["passed"] else "failed", "proof": proof}
 
@@ -333,7 +524,17 @@ def cmd_gate_validate_ready(args: argparse.Namespace) -> dict[str, Any]:
     )
     if ready["passed"]:
         mark_task_status(layout, module_path, args.task_id, "ready_validated")
-    return {"status": "ok" if ready["passed"] else "failed", "ready": ready}
+    ready_handoff = proof_dir(task_run_dir(layout, module_path, args.task_id)) / "READY" / "handoff.md"
+    append_event(
+        layout=layout,
+        event_type="ready.validated" if bool(ready["passed"]) else "ready.blocked",
+        actor="engine",
+        module_id=args.module_id,
+        task_id=args.task_id,
+        payload={"passed": bool(ready["passed"]), "handoff_path": str(ready_handoff)},
+        artifact_refs=[str(task_run_dir(layout, module_path, args.task_id) / "proofs" / "ready.json"), str(ready_handoff)],
+    )
+    return {"status": "ok" if ready["passed"] else "failed", "ready": ready, "handoff": str(ready_handoff)}
 
 
 def cmd_gate_approve_ready(args: argparse.Namespace) -> dict[str, Any]:
@@ -355,11 +556,26 @@ def cmd_gate_approve_ready(args: argparse.Namespace) -> dict[str, Any]:
     }
     write_json(ready_approval_path(layout, module_path, args.task_id), approval)
     mark_task_status(layout, module_path, args.task_id, "ready_approved")
+    ready_handoff = proof_dir(task_run_dir(layout, module_path, args.task_id)) / "READY" / "handoff.md"
+    append_event(
+        layout=layout,
+        event_type="ready.approved",
+        actor=args.approved_by,
+        module_id=args.module_id,
+        task_id=args.task_id,
+        payload={
+            "approved_by": args.approved_by,
+            "approved_at": approval["approved_at"],
+            "ready_proof_path": str(ready_proof_path),
+            "handoff_path": str(ready_handoff),
+        },
+        artifact_refs=[str(ready_approval_path(layout, module_path, args.task_id)), str(ready_handoff)],
+    )
 
     return {
         "status": "ok",
         "approval": approval,
-        "handoff": str(task_root / "handoff.json"),
+        "handoff": str(ready_handoff),
     }
 
 
@@ -412,6 +628,15 @@ def cmd_incident_add(args: argparse.Namespace) -> dict[str, Any]:
         context={"task_id": args.task_id} if args.task_id else {},
     )
     log_incident(layout.app_incidents, incident)
+    append_event(
+        layout=layout,
+        event_type="incident.logged",
+        actor="engine",
+        module_id=args.module_id,
+        task_id=args.task_id,
+        payload={"incident_id": incident["id"], "kind": incident["kind"], "severity": incident["severity"]},
+        artifact_refs=[str(layout.app_incidents)],
+    )
     return {"status": "ok", "incident": incident}
 
 
@@ -422,10 +647,27 @@ def cmd_retro_run(args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_validate(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
-    try:
-        return validate_all(layout, strict=args.strict)
-    except ValidationError as exc:
-        return {"status": "failed", "strict": args.strict, "error": str(exc)}
+    result: dict[str, Any] = {"status": "ok"}
+    if args.skills:
+        skills_check = validate_generated_skills(
+            engine_skills_src=layout.engine / "skills_src",
+            local_override=layout.local / "skills_override",
+            output_dir=layout.agents_skills,
+        )
+        result["skills"] = skills_check
+        if skills_check["status"] != "ok":
+            result["status"] = "failed"
+
+    if args.all or not args.skills:
+        try:
+            state_check = validate_all(layout, strict=args.strict)
+        except ValidationError as exc:
+            state_check = {"status": "failed", "strict": args.strict, "error": str(exc)}
+        result["state"] = state_check
+        if state_check.get("status") != "ok":
+            result["status"] = "failed"
+
+    return result
 
 
 def cmd_update_engine(args: argparse.Namespace) -> dict[str, Any]:
@@ -441,3 +683,82 @@ def cmd_migrate_state(args: argparse.Namespace) -> dict[str, Any]:
 def cmd_doctor_run(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     return run_doctor(layout, args.doctor_commands, git_boundary=args.git_boundary)
+
+
+def cmd_context_build(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return build_context_bundle(
+        layout=layout,
+        module_id=args.module_id,
+        task_id=args.task_id,
+        budget=args.budget,
+    )
+
+
+def cmd_pkm_build(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return build_pkm(layout=layout, module_id=args.module_id, top_k=args.top_k)
+
+
+def cmd_replay(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    if not args.check:
+        raise ValueError("Use replay --check")
+    replay = replay_check(layout)
+    failed = replay["status"] != "ok"
+    append_event(
+        layout=layout,
+        event_type="replay.failed" if failed else "replay.checked",
+        actor="engine",
+        payload={
+            "status": replay["status"],
+            "violations": len(replay.get("violations", [])),
+            "checks": len(replay.get("checks", [])),
+        },
+    )
+    if failed:
+        return {"status": "replay_failed", "replay": replay}
+    return {"status": "ok", "replay": replay}
+
+
+def cmd_skills_generate(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    generate_skills(
+        engine_skills_src=layout.engine / "skills_src",
+        local_override=layout.local / "skills_override",
+        output_dir=layout.agents_skills,
+    )
+    return {"status": "ok", "output_dir": str(layout.agents_skills)}
+
+
+def _completion_script(shell: str) -> str:
+    if shell == "bash":
+        return (
+            "_csk_complete() {\n"
+            "  local cur prev opts\n"
+            "  COMPREPLY=()\n"
+            "  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            "  opts=\"status new run approve module retro replay completion context pkm skills\"\n"
+            "  COMPREPLY=( $(compgen -W \"${opts}\" -- ${cur}) )\n"
+            "  return 0\n"
+            "}\n"
+            "complete -F _csk_complete csk\n"
+        )
+    if shell == "zsh":
+        return (
+            "#compdef csk\n"
+            "_csk_complete() {\n"
+            "  local -a commands\n"
+            "  commands=(status new run approve module retro replay completion context pkm skills)\n"
+            "  _describe 'command' commands\n"
+            "}\n"
+            "compdef _csk_complete csk\n"
+        )
+    return (
+        "complete -c csk -f\n"
+        "complete -c csk -a \"status new run approve module retro replay completion context pkm skills\"\n"
+    )
+
+
+def cmd_completion(args: argparse.Namespace) -> dict[str, Any]:
+    return {"status": "ok", "shell": args.shell, "script": _completion_script(args.shell)}

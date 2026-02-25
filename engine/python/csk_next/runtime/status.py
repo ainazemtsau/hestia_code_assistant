@@ -142,15 +142,33 @@ def _module_projection(layout: Layout, module_row: dict[str, Any], worktrees: di
     active = _active_task_state(task_states)
     task_status = str(active.get("status")) if active else None
     phase = _PHASE_BY_TASK_STATUS.get(task_status or "", "IDLE")
+    slices_total = 0
+    slices_done = 0
+    if active:
+        slices = active.get("slices", {})
+        if isinstance(slices, dict):
+            slices_total = len(slices)
+            slices_done = sum(1 for row in slices.values() if isinstance(row, dict) and row.get("status") == "done")
+    active_task_id = str(active["task_id"]) if active else None
     projection = {
         "module_id": module_id,
         "path": module_path,
         "phase": phase,
-        "active_task_id": str(active["task_id"]) if active else None,
+        "active_task_id": active_task_id,
         "active_slice_id": _active_slice_id(active),
+        "slices_done": slices_done,
+        "slices_total": slices_total,
         "task_status": task_status,
         "blocked_reason": str(active.get("blocked_reason")) if active and active.get("blocked_reason") else None,
         "worktree_path": worktrees.get(module_id),
+        "active_plan_path": (
+            str(layout.module_tasks(module_path) / active_task_id / "plan.md") if active_task_id is not None else None
+        ),
+        "active_slices_path": (
+            str(layout.module_tasks(module_path) / active_task_id / "slices.json")
+            if active_task_id is not None
+            else None
+        ),
     }
     return projection
 
@@ -309,9 +327,13 @@ def project_module_status(layout: Layout, module_id: str) -> dict[str, Any]:
             "phase": "IDLE",
             "active_task_id": None,
             "active_slice_id": None,
+            "slices_done": 0,
+            "slices_total": 0,
             "task_status": None,
             "blocked_reason": None,
             "worktree_path": None,
+            "active_plan_path": None,
+            "active_slices_path": None,
         }
 
     return {

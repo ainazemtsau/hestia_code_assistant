@@ -83,7 +83,7 @@ class UnitTests(unittest.TestCase):
                 task_id,
                 "--approved-by",
                 "tester",
-                expect_code=1,
+                expect_code=2,
             )
             self.assertEqual(payload["status"], "error")
             self.assertIn("freeze drift", payload["error"])
@@ -331,7 +331,9 @@ class UnitTests(unittest.TestCase):
             (local_src / "alpha" / "SKILL.md").write_text("override", encoding="utf-8")
 
             generate_skills(engine_src, local_src, out)
-            self.assertEqual((out / "alpha" / "SKILL.md").read_text(encoding="utf-8"), "override")
+            generated = (out / "alpha" / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("GENERATED: do not edit by hand", generated)
+            self.assertIn("override", generated)
 
     def test_task_transition_map_rejects_illegal_skip(self) -> None:
         with self.assertRaises(ValueError):
@@ -363,6 +365,15 @@ class UnitTests(unittest.TestCase):
             self.assertTrue((task_path / "decisions.jsonl").exists())
             self.assertTrue((session_root / "events.jsonl").exists())
             self.assertTrue((session_root / "result.json").exists())
+
+    def test_run_without_executable_slice_starts_wizard(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(root, "run")
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["wizard"]["session_status"], "in_progress")
+            self.assertEqual(payload["wizard"]["step"]["step_id"], "intake_request")
 
     def test_scope_required_empty_paths_fails(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -402,12 +413,30 @@ class UnitTests(unittest.TestCase):
                 task_id,
                 "--slice-id",
                 "S-0001",
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(payload["status"], "gate_failed")
             self.assertEqual(payload["gate"], "scope")
             incidents = (root / ".csk" / "app" / "logs" / "incidents.jsonl").read_text(encoding="utf-8")
             self.assertIn("scope_config_missing", incidents)
+
+    def test_context_build_respects_module_root_allowed_path_dot(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+
+            module_file = root / "mod" / "app" / "goal.txt"
+            module_file.parent.mkdir(parents=True, exist_ok=True)
+            module_file.write_text("goal token\n", encoding="utf-8")
+
+            payload = run_cli(root, "context", "build", "--module-id", "app", "--task-id", task_id)
+            self.assertEqual(payload["status"], "ok")
+            relevant_paths = [row["path"] for row in payload["bundle"]["relevant_files"]]
+            self.assertIn("goal.txt", relevant_paths)
 
     def test_verify_required_empty_commands_fails(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -447,12 +476,59 @@ class UnitTests(unittest.TestCase):
                 task_id,
                 "--slice-id",
                 "S-0001",
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(payload["status"], "gate_failed")
             self.assertEqual(payload["gate"], "verify")
             incidents = (root / ".csk" / "app" / "logs" / "incidents.jsonl").read_text(encoding="utf-8")
             self.assertIn("verify_config_missing", incidents)
+
+    def test_verify_policy_rejection_fails_slice_without_leaving_running_state(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+            run_cli(
+                root,
+                "task",
+                "approve-plan",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--approved-by",
+                "tester",
+            )
+
+            payload = run_cli(
+                root,
+                "slice",
+                "run",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--slice-id",
+                "S-0001",
+                "--verify-cmd",
+                "curl https://example.com",
+                expect_code=10,
+            )
+            self.assertIn(payload["status"], {"gate_failed", "blocked"})
+            self.assertEqual(payload["gate"], "verify")
+
+            task_state = json.loads(
+                (module_state_root(root, "mod/app") / "tasks" / task_id / "task.json").read_text(encoding="utf-8")
+            )
+            self.assertNotEqual(task_state["slices"]["S-0001"]["status"], "running")
+            incidents = (root / ".csk" / "app" / "logs" / "incidents.jsonl").read_text(encoding="utf-8")
+            self.assertIn("verify_policy_reject", incidents)
 
     def test_ready_uses_local_profile_override(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -508,7 +584,7 @@ class UnitTests(unittest.TestCase):
                 "app",
                 "--task-id",
                 task_id,
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(ready_fail["status"], "failed")
             self.assertFalse(ready_fail["ready"]["checks"]["user_check_recorded"]["passed"])
@@ -525,6 +601,38 @@ class UnitTests(unittest.TestCase):
 
             ready_ok = run_cli(root, "gate", "validate-ready", "--module-id", "app", "--task-id", task_id)
             self.assertEqual(ready_ok["status"], "ok")
+
+    def test_new_uses_local_default_profile_when_profile_flag_is_omitted(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            config_path = root / ".csk" / "local" / "config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0.0",
+                        "default_profile": "python",
+                        "worktree_default": True,
+                        "allowlist_commands": [],
+                        "denylist_commands": ["rm", "sudo", "curl", "wget"],
+                        "user_check_mode": "profile_optional",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            created = run_cli(root, "new", "Use local profile default", "--modules", "app")
+            task_id = created["task_id"]
+            task_state = json.loads(
+                (module_state_root(root, "mod/app") / "tasks" / task_id / "task.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(task_state["profile"], "python")
 
     def test_worktree_failure_fallback_incident(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -570,10 +678,101 @@ class UnitTests(unittest.TestCase):
                 task_id,
                 "--slice-id",
                 "S-0001",
-                expect_code=1,
+                expect_code=10,
             )
             self.assertEqual(payload["status"], "failed")
             self.assertFalse(payload["proof"]["passed"])
+
+    def test_retro_alias_without_subcommand(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            payload = run_cli(
+                root,
+                "retro",
+                "--module-id",
+                "app",
+                "--task-id",
+                task["task_id"],
+                expect_code=2,
+            )
+            self.assertEqual(payload["status"], "error")
+            self.assertIn("Retro requires task status", payload["error"])
+
+    def test_replay_exit_code_30_on_invariant_violation(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(
+                root,
+                "event",
+                "append",
+                "--type",
+                "proof.pack.written",
+                "--payload",
+                '{"manifest_path":"/definitely/missing/manifest.json"}',
+            )
+            replay = run_cli(root, "replay", "--check", expect_code=30)
+            self.assertEqual(replay["status"], "replay_failed")
+            self.assertGreater(len(replay["replay"]["violations"]), 0)
+
+    def test_completion_prints_raw_script(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            env = dict(os.environ)
+            env["PYTHONPATH"] = PYTHONPATH
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "csk_next.cli.main",
+                    "--root",
+                    str(root),
+                    "completion",
+                    "bash",
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0)
+            self.assertIn("complete -F _csk_complete csk", proc.stdout)
+            self.assertNotIn('"status": "ok"', proc.stdout)
+
+    def test_validate_skills_detects_drift(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            skill_files = sorted((root / ".agents" / "skills").rglob("SKILL.md"))
+            self.assertTrue(skill_files)
+            generated_skill = skill_files[0]
+            generated_skill.write_text(generated_skill.read_text(encoding="utf-8") + "\nDRIFT\n", encoding="utf-8")
+
+            payload = run_cli(root, "validate", "--skills", expect_code=10)
+            self.assertEqual(payload["status"], "failed")
+            self.assertTrue(payload["skills"]["modified"])
+
+    def test_validate_skills_detects_non_markdown_drift(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            override_dir = root / ".csk" / "local" / "skills_override" / "custom"
+            override_dir.mkdir(parents=True, exist_ok=True)
+            (override_dir / "SKILL.md").write_text("# custom skill\n", encoding="utf-8")
+            (override_dir / "template.txt").write_text("version-1\n", encoding="utf-8")
+
+            run_cli(root, "skills", "generate")
+            generated = root / ".agents" / "skills" / "custom" / "template.txt"
+            self.assertTrue(generated.exists())
+            generated.write_text("drifted\n", encoding="utf-8")
+
+            payload = run_cli(root, "validate", "--skills", expect_code=10)
+            self.assertEqual(payload["status"], "failed")
+            self.assertIn("custom/template.txt", payload["skills"]["modified"])
 
     def test_event_log_bootstrap_started_completed_and_idempotent(self) -> None:
         with TemporaryDirectory() as temp_dir:

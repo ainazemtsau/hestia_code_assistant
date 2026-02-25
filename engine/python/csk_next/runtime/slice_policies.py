@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from csk_next.eventlog.store import append_event
+from csk_next.io.jsonl import append_jsonl
 from csk_next.runtime.incidents import log_incident, make_incident
+from csk_next.runtime.tasks import task_dir
 from csk_next.runtime.tasks_engine import mark_task_blocked, update_slice_state
 
 
@@ -38,6 +41,17 @@ def fail_slice(
         context=context,
     )
     log_incident(layout.app_incidents, incident)
+    append_jsonl(task_dir(layout, module_path, task_id) / "incidents.jsonl", incident)
+    append_event(
+        layout=layout,
+        event_type="incident.logged",
+        actor="engine",
+        module_id=module_id,
+        task_id=task_id,
+        slice_id=slice_id,
+        payload={"incident_id": incident["id"], "kind": kind, "severity": severity, "phase": phase},
+        artifact_refs=[str(layout.app_incidents), str(task_dir(layout, module_path, task_id) / "incidents.jsonl")],
+    )
     update_slice_state(
         layout=layout,
         module_path=module_path,

@@ -5,42 +5,38 @@ Date: 2026-02-25
 ## Purpose
 Define the implementation target for this MVP as:
 - base spec: `csk_next_mvp_docpack_v0.1`
-- plus explicit project overrides already implemented and accepted.
+- plus explicit project overrides accepted for this repository.
 
 This document prevents drift between "strict docpack" and current production behavior.
 
 ## Canonical Sources
-1. `csk_next_mvp_docpack_v0.1 (1)/csk_next_mvp_docs/**`
+1. `csk_next_mvp_docpack_v0.1/csk_next_mvp_docs/**`
 2. `docs/traceability_matrix.md`
-3. `docs/ops_runbook.md`
-4. `docs/self_host_workflow.md`
+3. `docs/plan_of_record.md`
+4. `docs/ops_runbook.md`
+5. `docs/self_host_workflow.md`
 
 If sources conflict: this delta file wins for v0.1.1 behavior.
 
 ## Accepted Deltas (Mandatory)
-1. Public entrypoint is wizard-first `csk run`, not dashboard-first `csk` root UX.
-2. Module routing in `run` is explicit (`module_id:path`); no auto module detection is used there.
-   `registry detect` is allowed as a separate/bootstrap utility.
-3. Self-host mode with external `--state-root` is the default operating mode.
-4. Runtime artifacts stay outside product Git boundary; `doctor run --git-boundary` is mandatory before push.
-5. Proofs are operationalized under task run directories (`run/proofs`, `run/logs`) and validated by strict checks.
-6. `user_check` is profile-optional by default; mandatory only when profile sets `user_check_required=true`.
-7. Worktree creation can fallback with incident logging (controlled no-worktree path), not hard-fail mission creation.
-8. CLI output is JSON-first for automation; `NEXT` block UX from docpack is deferred.
+1. Self-host mode with external `--state-root` is the default operating mode.
+2. Runtime artifacts stay outside product Git boundary; `doctor run --git-boundary` is mandatory before push.
+3. `user_check` is profile-optional by default; mandatory only when profile sets `user_check_required=true`.
+4. Worktree creation may fallback with incident logging instead of hard-failing mission creation.
+5. Public CLI follows docpack UX; current internal command groups remain supported during migration until P18.
+6. `--json` machine output remains supported for automation and tests.
 
 ## Phase Policy
 Phases still execute strictly in order `P00 -> P18`, but interpreted through the accepted deltas above.
 
-Status baseline on 2026-02-25:
-- Implemented: `P00`, `P02`, `P03`, `P04`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P12`, `P13`
-- Partial/diverged: `P01`, `P11`, `P17`
-- Gaps: `P14`, `P15`, `P16`, `P18`
+Status baseline on 2026-02-25 (current repository state):
+- Done: `P00`, `P01`, `P02`, `P03`, `P04`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P11`, `P12`, `P13`, `P14`, `P15`, `P16`, `P18`
+- Partial/diverged: `P17`
+- Gaps: none
 
 Priority queue:
-1. `P14` Context Builder v1
-2. `P15` PKM v0
-3. `P16` Replay check
-4. `P18` completion/help ergonomics
+1. `P17` Skills template UX polish
+2. Stabilization hardening and backward-compatibility checks through `P18`
 
 ## Definition of Done Per Phase
 A phase is complete only when all are true:

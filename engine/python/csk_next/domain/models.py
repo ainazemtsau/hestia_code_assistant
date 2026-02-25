@@ -137,7 +137,7 @@ def mission_stub(mission_id: str, title: str, summary: str) -> dict[str, Any]:
         "mission_id": mission_id,
         "title": title,
         "summary": summary,
-        "status": "draft",
+        "status": "active",
         "created_at": now,
         "updated_at": now,
     }
@@ -171,9 +171,27 @@ def milestone_stub(mission_id: str) -> dict[str, Any]:
             {
                 "milestone_id": "MS-0001",
                 "title": "Milestone 1",
-                "status": "draft",
+                "status": "active",
                 "module_items": [],
                 "depends_on": [],
+                "parallel_groups": [],
+                "integration_checks": [],
+            },
+            {
+                "milestone_id": "MS-0002",
+                "title": "Milestone 2",
+                "status": "planned",
+                "module_items": [],
+                "depends_on": ["MS-0001"],
+                "parallel_groups": [],
+                "integration_checks": [],
+            },
+            {
+                "milestone_id": "MS-0003",
+                "title": "Milestone 3",
+                "status": "planned",
+                "module_items": [],
+                "depends_on": ["MS-0002"],
                 "parallel_groups": [],
                 "integration_checks": [],
             }
