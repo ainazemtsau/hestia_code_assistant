@@ -1,6 +1,6 @@
 # CSK-Next Target Spec Delta v0.1.1
 
-Date: 2026-02-24
+Date: 2026-02-25
 
 ## Purpose
 Define the implementation target for this MVP as:
@@ -19,7 +19,8 @@ If sources conflict: this delta file wins for v0.1.1 behavior.
 
 ## Accepted Deltas (Mandatory)
 1. Public entrypoint is wizard-first `csk run`, not dashboard-first `csk` root UX.
-2. Module routing is explicit (`module_id:path`), no auto module detection in v1.
+2. Module routing in `run` is explicit (`module_id:path`); no auto module detection is used there.
+   `registry detect` is allowed as a separate/bootstrap utility.
 3. Self-host mode with external `--state-root` is the default operating mode.
 4. Runtime artifacts stay outside product Git boundary; `doctor run --git-boundary` is mandatory before push.
 5. Proofs are operationalized under task run directories (`run/proofs`, `run/logs`) and validated by strict checks.
@@ -30,18 +31,17 @@ If sources conflict: this delta file wins for v0.1.1 behavior.
 ## Phase Policy
 Phases still execute strictly in order `P00 -> P18`, but interpreted through the accepted deltas above.
 
-Status baseline on 2026-02-24:
-- Implemented: `P00`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P12`, `P13`
-- Partial/diverged: `P01`, `P03`, `P11`, `P17`
-- Gaps: `P02`, `P04`, `P14`, `P15`, `P16`, `P18`
+Status baseline on 2026-02-25:
+- Implemented: `P00`, `P02`, `P03`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P12`, `P13`
+- Partial/diverged: `P01`, `P11`, `P17`
+- Gaps: `P04`, `P14`, `P15`, `P16`, `P18`
 
 Priority queue:
-1. `P02` Event Log SSOT
-2. `P04` status projection/dashboard from SSOT
-3. `P14` Context Builder v1
-4. `P15` PKM v0
-5. `P16` Replay check
-6. `P18` completion/help ergonomics
+1. `P04` status projection/dashboard from SSOT
+2. `P14` Context Builder v1
+3. `P15` PKM v0
+4. `P16` Replay check
+5. `P18` completion/help ergonomics
 
 ## Definition of Done Per Phase
 A phase is complete only when all are true:

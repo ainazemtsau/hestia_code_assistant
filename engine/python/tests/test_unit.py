@@ -127,6 +127,46 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(added["status"], "ok")
             self.assertEqual(added["module"]["path"], "modules/app")
 
+    def test_bootstrap_runs_registry_detect_when_empty(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "packages" / "auth").mkdir(parents=True, exist_ok=True)
+            (root / "apps" / "web").mkdir(parents=True, exist_ok=True)
+            (root / "services" / "api").mkdir(parents=True, exist_ok=True)
+
+            bootstrap = run_cli(root, "bootstrap")
+            self.assertEqual(bootstrap["status"], "ok")
+            self.assertEqual(bootstrap["registry_modules"], 3)
+            self.assertEqual(bootstrap["registry_detect_created"], 3)
+
+            module_list_payload = run_cli(root, "module", "list")
+            self.assertEqual(module_list_payload["status"], "ok")
+            roots = {item["root_path"] for item in module_list_payload["modules"]}
+            self.assertEqual(roots, {"packages/auth", "apps/web", "services/api"})
+
+            show = run_cli(root, "module", "show", "auth")
+            self.assertEqual(show["status"], "ok")
+            self.assertEqual(show["module"]["root_path"], "packages/auth")
+            self.assertIn("auth", show["module"]["keywords"])
+
+            detect_again = run_cli(root, "registry", "detect")
+            self.assertEqual(detect_again["status"], "ok")
+            self.assertEqual(detect_again["created_count"], 0)
+
+    def test_registry_detect_fallback_root_module(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            bootstrap = run_cli(root, "bootstrap")
+            self.assertEqual(bootstrap["status"], "ok")
+            self.assertEqual(bootstrap["registry_modules"], 1)
+            self.assertEqual(bootstrap["registry_detect_created"], 1)
+
+            module_list_payload = run_cli(root, "module", "list")
+            self.assertEqual(module_list_payload["status"], "ok")
+            self.assertEqual(len(module_list_payload["modules"]), 1)
+            self.assertEqual(module_list_payload["modules"][0]["module_id"], "root")
+            self.assertEqual(module_list_payload["modules"][0]["root_path"], ".")
+
     def test_external_state_root_keeps_repo_without_runtime_dirs(self) -> None:
         with TemporaryDirectory() as temp_dir, TemporaryDirectory() as state_dir:
             root = Path(temp_dir)

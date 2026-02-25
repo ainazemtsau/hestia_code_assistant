@@ -3,7 +3,7 @@
 ## Sources
 - `CSK_NEXT_Phase_Spec_RU.md` (draft v0.1, 2026-02-20)
 - `docs/target_spec_delta_v0.1.1.md` (docpack + accepted overrides)
-- User overrides (chat): no auto module detection in v1, module kernels on demand, `module detect` removed, proofs in run/, user-check profile-optional.
+- User overrides (chat): no automatic module detection in `run` flow; explicit module mapping remains mandatory there.
 
 ## Requirement Coverage
 
@@ -42,6 +42,8 @@
 | R30 | Event Log v1 in SQLite (`.csk/app/eventlog.sqlite`) with append-only table + indices | `eventlog/store.py` | `test_event_log_bootstrap_started_completed_and_idempotent` |
 | R31 | Command wrapper emits `command.started`/`command.completed` for CLI invocations | `cli/main.py`, `eventlog/store.py` | `test_event_log_bootstrap_started_completed_and_idempotent` |
 | R32 | Internal event API via CLI (`event append`, `event tail`) with scope filters | `cli/parser.py`, `cli/handlers.py`, `eventlog/store.py` | `test_event_append_and_tail_filters` |
+| R33 | Registry detect + module list/show commands | `runtime/modules.py`, `cli/parser.py`, `cli/handlers.py` | `test_bootstrap_runs_registry_detect_when_empty`, `test_registry_detect_fallback_root_module` |
+| R34 | Bootstrap auto-runs registry detect only when registry is empty | `runtime/bootstrap.py`, `runtime/modules.py` | `test_bootstrap_runs_registry_detect_when_empty`, `test_registry_detect_fallback_root_module` |
 
 ## Coverage Status
 

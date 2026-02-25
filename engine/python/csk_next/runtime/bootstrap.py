@@ -7,6 +7,7 @@ from typing import Any
 
 from csk_next.domain.state import ensure_registry
 from csk_next.io.files import copy_tree, ensure_dir, write_json, write_text
+from csk_next.runtime.modules import registry_detect
 from csk_next.runtime.paths import Layout
 from csk_next.skills.generator import generate_skills
 from csk_next.runtime.time import utc_now_iso
@@ -86,10 +87,17 @@ def bootstrap(layout: Layout) -> dict[str, Any]:
     )
 
     registry = ensure_registry(layout.registry)
+    if not registry["modules"]:
+        detect_result = registry_detect(layout)
+        registry = ensure_registry(layout.registry)
+    else:
+        detect_result = {"created_count": 0, "module_count": len(registry["modules"])}
+
     return {
         "status": "ok",
         "root": str(layout.root),
         "registry_modules": len(registry["modules"]),
+        "registry_detect_created": int(detect_result.get("created_count", 0)),
         "engine_version": (layout.engine / "VERSION").read_text(encoding="utf-8").strip()
         if (layout.engine / "VERSION").exists()
         else "unknown",

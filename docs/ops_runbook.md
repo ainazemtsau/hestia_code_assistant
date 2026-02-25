@@ -25,6 +25,13 @@ Wizard captures request and explicit module mapping, then materializes:
 
 No module autodetect is used in v1.
 
+If you want to pre-fill registry from repo structure outside wizard flow:
+
+```bash
+... registry detect
+... module list
+```
+
 ## 3. Plan Gate Sequence
 
 ```bash

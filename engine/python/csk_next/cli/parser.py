@@ -49,8 +49,21 @@ def build_parser() -> argparse.ArgumentParser:
     intake_p.add_argument("request")
     intake_p.set_defaults(handler=handlers.cmd_intake)
 
+    registry_p = sub.add_parser("registry")
+    registry_sub = registry_p.add_subparsers(dest="registry_cmd", required=True)
+
+    registry_detect_p = registry_sub.add_parser("detect")
+    registry_detect_p.set_defaults(handler=handlers.cmd_registry_detect)
+
     module_p = sub.add_parser("module")
     module_sub = module_p.add_subparsers(dest="module_cmd", required=True)
+
+    module_list_p = module_sub.add_parser("list")
+    module_list_p.set_defaults(handler=handlers.cmd_module_list)
+
+    module_show_p = module_sub.add_parser("show")
+    module_show_p.add_argument("module_id")
+    module_show_p.set_defaults(handler=handlers.cmd_module_show)
 
     module_add_p = module_sub.add_parser("add")
     module_add_p.add_argument("--path", required=True)

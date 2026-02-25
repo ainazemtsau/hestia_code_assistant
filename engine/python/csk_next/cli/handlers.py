@@ -20,7 +20,14 @@ from csk_next.runtime.bootstrap import bootstrap
 from csk_next.runtime.incidents import log_incident, make_incident
 from csk_next.runtime.intake import classify_request
 from csk_next.runtime.missions import mission_new, mission_status, spawn_milestone
-from csk_next.runtime.modules import module_add, module_init, module_status
+from csk_next.runtime.modules import (
+    module_add,
+    module_init,
+    module_list,
+    module_show,
+    module_status,
+    registry_detect,
+)
 from csk_next.runtime.paths import Layout, resolve_layout
 from csk_next.runtime.proofs import proof_dir
 from csk_next.runtime.retro import run_retro
@@ -103,6 +110,16 @@ def cmd_module_add(args: argparse.Namespace) -> dict[str, Any]:
     return module_add(layout, args.path, args.module_id)
 
 
+def cmd_module_list(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return module_list(layout)
+
+
+def cmd_module_show(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return module_show(layout, args.module_id)
+
+
 def cmd_module_init(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     return module_init(layout, args.module_id, write_scaffold=args.write_scaffold)
@@ -119,6 +136,11 @@ def cmd_intake(args: argparse.Namespace) -> dict[str, Any]:
     module_candidates = [item["module_id"] for item in registry["modules"]]
     payload = classify_request(args.request, module_candidates)
     return {"status": "ok", "intake": payload}
+
+
+def cmd_registry_detect(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return registry_detect(layout)
 
 
 def cmd_mission_new(args: argparse.Namespace) -> dict[str, Any]:

@@ -22,6 +22,7 @@ def _command_name(args: argparse.Namespace) -> str:
     if command:
         parts.append(str(command))
     for attr in [
+        "registry_cmd",
         "wizard_cmd",
         "module_cmd",
         "mission_cmd",

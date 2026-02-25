@@ -53,13 +53,14 @@ Blocking invariants:
 - Bootstrap and routing:
   - `bootstrap`
   - `run`
+  - `registry detect`
   - `wizard start|answer|status`
 - Planning/execution:
   - `task new|critic|freeze|approve-plan|status`
   - `slice run|mark`
   - `gate scope-check|verify|record-review|validate-ready|approve-ready`
 - Mission/module:
-  - `module add|init|status`
+  - `module list|show|add|init|status`
   - `mission new|status|spawn-milestone`
 - Operations:
   - `event append|tail`
