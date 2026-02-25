@@ -9,3 +9,6 @@ Profile-based e2e role.
 ## Backend commands
 - `csk slice run ... --e2e-cmd <cmd>`
 - `csk gate validate-ready`
+
+## NEXT
+NEXT: `csk gate validate-ready --module-id <id> --task-id <id>`

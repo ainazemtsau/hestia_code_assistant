@@ -54,9 +54,14 @@
 | R42 | Shell completion generation (`bash|zsh|fish`) and install guide | `cli/handlers.py::cmd_completion`, `examples/INSTALL_COMPLETION.md` | `test_completion_prints_raw_script` |
 | R43 | Generated skills drift validation via `validate --skills` | `skills/generator.py::validate_generated_skills`, `cli/handlers.py::cmd_validate` | `test_validate_skills_detects_drift` |
 | R44 | Text-mode `SUMMARY/STATUS/NEXT` rendering for interactive root/module dashboards while preserving JSON output for automation | `cli/main.py` (`_print_status_text`, `_print_module_text`) | covered by manual smoke; JSON compatibility validated by full unittest suite |
+| R45 | Root status exposes generated-skills health and prioritizes `csk skills generate` when skills drift is detected | `runtime/status.py` (`_skills_projection`, `_status_next`) | `test_status_includes_skills_projection`, `test_status_next_prefers_skills_generate_when_skills_are_drifted`, `test_acceptance_f_skills_drift_recovery` |
+| R46 | User-facing CLI error payloads include actionable `next` block (`csk/new/run/approve/module/retro/replay`) | `cli/main.py` (`_error_next`) | `test_approve_error_includes_next_for_user_flow`, `test_replay_error_includes_next_for_user_flow`, `test_retro_alias_without_subcommand` |
+| R47 | Skills generation is deterministic across repeated runs | `skills/generator.py`, `cli/handlers.py::cmd_skills_generate` | `test_skills_generate_is_deterministic` |
+| R48 | Engine skill templates include explicit terminal `NEXT:` guidance | `assets/engine_pack/skills_src/*/SKILL.md` | `test_skills_templates_include_next_block` |
 
 ## Coverage Status
 
 - Recovery gaps RB-001..RB-011 are implemented and covered by tests.
 - Public migration contract (`new/run/approve/module/retro/replay/completion`) is implemented with compatibility aliases retained.
+- Operational RC baseline for working and clean state roots is captured in `docs/rc_baseline_2026-02-25.md`.
 - `user-check` remains profile-optional by default and becomes mandatory only when profile sets `user_check_required=true`.

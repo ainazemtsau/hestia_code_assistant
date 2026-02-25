@@ -13,6 +13,15 @@ from csk_next.runtime.paths import resolve_layout
 
 
 _MODULE_SUBCOMMANDS = {"list", "show", "add", "init", "status"}
+_USER_FACING_COMMANDS = {
+    "status",
+    "new",
+    "run",
+    "approve",
+    "module status",
+    "retro run",
+    "replay",
+}
 
 
 def _print(payload: dict[str, Any]) -> None:
@@ -28,16 +37,24 @@ def _render_list(values: list[str]) -> str:
 def _print_status_text(payload: dict[str, Any]) -> None:
     summary = payload.get("summary", {})
     modules = payload.get("modules", [])
+    skills = payload.get("skills", {})
     next_block = payload.get("next", {})
+    skills_status = "ok" if str(skills.get("status", "ok")) == "ok" else "stale"
     print("SUMMARY")
     print(
         f"bootstrapped={summary.get('bootstrapped')} "
         f"mission={summary.get('active_mission_id')} "
         f"milestone={summary.get('active_milestone_id')} "
-        f"modules={summary.get('modules_total')}"
+        f"modules={summary.get('modules_total')} "
+        f"skills={skills_status}"
     )
     print("")
     print("STATUS")
+    if skills_status != "ok":
+        print(
+            f"- skills: stale modified={len(skills.get('modified', []))} "
+            f"missing={len(skills.get('missing', []))} stale={len(skills.get('stale', []))}"
+        )
     if not modules:
         print("- no modules")
     else:
@@ -170,6 +187,41 @@ def _command_scope(args: argparse.Namespace) -> dict[str, str | None]:
     }
 
 
+def _error_next(command_name: str, args: argparse.Namespace) -> dict[str, Any] | None:
+    if command_name not in _USER_FACING_COMMANDS:
+        return None
+
+    if command_name == "status":
+        return {"recommended": "csk run", "alternatives": ["csk status --json"]}
+    if command_name == "new":
+        return {"recommended": "csk module list", "alternatives": ["csk status --json"]}
+    if command_name == "run":
+        return {"recommended": "csk status --json", "alternatives": ["csk new \"<request>\" --modules <id>"]}
+    if command_name == "approve":
+        module_id = getattr(args, "module_id", None)
+        task_id = getattr(args, "task_id", None)
+        if module_id and task_id:
+            return {
+                "recommended": f"csk task status --module-id {module_id} --task-id {task_id}",
+                "alternatives": [f"csk module {module_id}", "csk status --json"],
+            }
+        return {"recommended": "csk status --json", "alternatives": ["csk module list"]}
+    if command_name == "module status":
+        return {"recommended": "csk module list", "alternatives": ["csk status --json"]}
+    if command_name == "retro run":
+        module_id = getattr(args, "module_id", None)
+        task_id = getattr(args, "task_id", None)
+        if module_id and task_id:
+            return {
+                "recommended": f"csk task status --module-id {module_id} --task-id {task_id}",
+                "alternatives": [f"csk module {module_id}", "csk status --json"],
+            }
+        return {"recommended": "csk status --json", "alternatives": ["csk module list"]}
+    if command_name == "replay":
+        return {"recommended": "csk replay --check", "alternatives": ["csk event tail --n 20", "csk status --json"]}
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else list(sys.argv[1:])
     parsed_argv = _rewrite_user_aliases(raw_argv)
@@ -218,6 +270,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:  # noqa: BLE001
             pass
         payload = {"status": "error", "error": str(exc)}
+        next_block = _error_next(command_name, args)
+        if next_block:
+            payload["next"] = next_block
         _print(payload)
         return exit_code
 

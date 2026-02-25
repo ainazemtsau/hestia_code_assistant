@@ -83,6 +83,7 @@ Strict validation:
 
 ```bash
 ... validate --all --strict
+... validate --all --strict --skills
 ```
 
 Doctor diagnostics:
@@ -98,6 +99,16 @@ Event log diagnostics:
 ... event tail --n 20
 ... event append --type custom.note --payload '{"note":"manual marker"}'
 ```
+
+Skills consistency recovery:
+
+```bash
+... status --json
+... skills generate
+... validate --skills
+```
+
+If `status.skills.status=failed`, recommended next action is `csk skills generate`.
 
 Legacy migration to external state root:
 
@@ -120,3 +131,16 @@ Behavior:
 5. rollback + incident on failure
 
 `<state>/.csk/local` is preserved.
+
+## 9. Local Gate Pack Before Merge
+
+Run locally on working `state_root`:
+
+```bash
+PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+... validate --all --strict --skills
+... replay --check
+... doctor run --git-boundary
+```
+
+Reference baseline: `docs/rc_baseline_2026-02-25.md`.

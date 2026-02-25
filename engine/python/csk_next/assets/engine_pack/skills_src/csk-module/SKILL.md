@@ -11,3 +11,6 @@ Module routing and kernel initialization helper.
 - `csk module add --path <path> --module-id <id>`
 - `csk module init --module-id <id>`
 - `csk module status`
+
+## NEXT
+NEXT: `csk module <id>`

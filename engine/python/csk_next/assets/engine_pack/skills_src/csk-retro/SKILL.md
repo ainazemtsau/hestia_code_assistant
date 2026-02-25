@@ -8,3 +8,6 @@ Retro and improvements role.
 
 ## Backend commands
 - `csk retro run --module-id <id> --task-id <id>`
+
+## NEXT
+NEXT: `csk status`

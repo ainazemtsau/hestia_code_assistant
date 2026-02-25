@@ -11,3 +11,6 @@ Planning wizard role.
 - `csk run` (preferred)
 - `csk wizard start|answer|status`
 - `csk task new`
+
+## NEXT
+NEXT: `csk approve --module-id <id> --task-id <id> --approved-by <human>`

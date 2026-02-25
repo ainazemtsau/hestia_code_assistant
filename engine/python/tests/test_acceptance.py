@@ -537,6 +537,39 @@ class AcceptanceTests(unittest.TestCase):
             self.assertTrue(generated.exists())
             self.assertIn("override", generated.read_text(encoding="utf-8"))
 
+    def test_acceptance_f_skills_drift_recovery(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            self.assertEqual(run_cli(root, "validate", "--all", "--strict", "--skills")["status"], "ok")
+
+            skill_files = sorted((root / ".agents" / "skills").rglob("SKILL.md"))
+            self.assertTrue(skill_files)
+            skill = skill_files[0]
+            skill.write_text(skill.read_text(encoding="utf-8") + "\nDRIFT\n", encoding="utf-8")
+
+            status = run_cli(root, "status", "--json")
+            self.assertEqual(status["skills"]["status"], "failed")
+            self.assertEqual(status["next"]["recommended"], "csk skills generate")
+
+            failed = run_cli(root, "validate", "--all", "--strict", "--skills", expect_code=10)
+            self.assertEqual(failed["status"], "failed")
+
+            self.assertEqual(run_cli(root, "skills", "generate")["status"], "ok")
+            self.assertEqual(run_cli(root, "validate", "--all", "--strict", "--skills")["status"], "ok")
+
+    def test_acceptance_g_clean_state_gate_pack(self) -> None:
+        with TemporaryDirectory() as temp_dir, TemporaryDirectory() as state_dir:
+            root = Path(temp_dir)
+            state_root = Path(state_dir) / "state"
+            self.assertEqual(run_cli(root, "bootstrap", state_root=state_root)["status"], "ok")
+            self.assertEqual(
+                run_cli(root, "validate", "--all", "--strict", "--skills", state_root=state_root)["status"],
+                "ok",
+            )
+            self.assertEqual(run_cli(root, "replay", "--check", state_root=state_root)["status"], "ok")
+            self.assertEqual(run_cli(root, "doctor", "run", "--git-boundary", state_root=state_root)["status"], "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

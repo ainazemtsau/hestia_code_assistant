@@ -49,10 +49,10 @@ Status values:
 | P14 | done | `csk context build` implemented with lexical retrieval, provenance, freshness, and event emission. |
 | P15 | done | `csk pkm build` implemented from `verify.passed` evidence with `pkm.item.*` events and context usage. |
 | P16 | done | `csk replay --check` implemented with invariant report and exit code `30` on violations. |
-| P17 | partial | Skills generation/validation contract aligned; remaining template UX polish tracked. |
+| P17 | done | Skills generation deterministic, template `NEXT:` contract aligned, status/validate skills drift flow covered by tests. |
 | P18 | done | `csk completion` for bash/zsh/fish and help/common flows docs updated. |
 
 ## Active Work Queue
 
-1. Finalize remaining polish for `P17` skill template UX wording.
-2. Preserve backward compatibility command groups through the end of `P18` stabilization window.
+1. Preserve backward compatibility command groups through the end of `P18` stabilization window.
+2. Keep local gate-pack mandatory before merge (`unittest`, `validate --all --strict --skills`, `replay --check`, `doctor --git-boundary`).

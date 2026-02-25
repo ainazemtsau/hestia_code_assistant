@@ -11,3 +11,6 @@ Single entrypoint router for CSK-Next.
 - Do not bypass wizard planning.
 - Do not bypass phase gates.
 - Record incidents for all deviations.
+
+## NEXT
+NEXT: `csk run`

@@ -10,3 +10,6 @@ Workflow update role.
 ## Backend commands
 - `csk update engine`
 - `csk validate --all --strict`
+
+## NEXT
+NEXT: `csk status --json`

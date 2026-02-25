@@ -18,6 +18,8 @@ Primary user flow commands are `csk`, `csk new`, `csk run`, `csk approve`, `csk 
 Low-level commands remain available as backend APIs for skills and automation.
 `--state-root` can also be provided via `CSK_STATE_ROOT`.
 Interactive `csk`/`csk module <id>` render `SUMMARY/STATUS/NEXT`; machine mode remains JSON (`csk status --json`).
+`csk status --json` also reports generated skills health; when skills drift is detected, `NEXT` recommends `csk skills generate`.
+User-facing error responses include actionable `next` guidance.
 
 ## One-Command Flow (`csk run`)
 
@@ -94,6 +96,7 @@ Blocking invariants:
   - module proofs: `<state-root>/.csk/modules/<module_path>/run/tasks/T-####/proofs/`
 
 See `docs/ops_runbook.md`, `docs/error_catalog.md`, `docs/git_boundary.md`, and `docs/self_host_workflow.md`.
+Operational baseline snapshot: `docs/rc_baseline_2026-02-25.md`.
 
 Canonical planning/spec sources:
 - `csk_next_mvp_docpack_v0.1/csk_next_mvp_docs/**`

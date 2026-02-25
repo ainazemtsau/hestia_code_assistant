@@ -11,3 +11,6 @@ Plan gate critic role.
 - `csk task critic --module-id <id> --task-id <id> --p0 ... --p1 ...`
 - `csk task freeze`
 - `csk task approve-plan`
+
+## NEXT
+NEXT: `csk plan freeze --module-id <id> --task-id <id>`

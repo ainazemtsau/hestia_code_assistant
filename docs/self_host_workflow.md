@@ -21,9 +21,16 @@ Runtime artifacts are stored in `<state>`:
    - `PYTHONPATH=engine/python python -m csk_next.cli.main --root <repo> --state-root <state> run`
 3. Run gates and approvals as usual with the same `--root` and `--state-root`.
 4. Before push:
+   - `... validate --all --strict --skills`
+   - `... replay --check`
    - `... doctor run --git-boundary`
    - `git status --short`
    - `git diff --cached --name-only`
+
+If `status --json` reports `skills.status=failed`:
+
+- `... skills generate`
+- re-run `... validate --skills`
 
 ## Migrating existing local state
 

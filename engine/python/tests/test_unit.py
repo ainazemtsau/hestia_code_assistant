@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import unittest
+from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -51,6 +52,14 @@ def run_cli(
 
 def module_state_root(root: Path, module_path: str) -> Path:
     return root / ".csk" / "modules" / Path(module_path)
+
+
+def tree_digest(root: Path) -> str:
+    rows: list[str] = []
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        rel = path.relative_to(root).as_posix()
+        rows.append(f"{rel}:{sha256(path.read_bytes()).hexdigest()}")
+    return sha256("\n".join(rows).encode("utf-8")).hexdigest()
 
 
 class UnitTests(unittest.TestCase):
@@ -219,6 +228,31 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(module_blocked_payload["module"]["phase"], "BLOCKED")
             self.assertIn("retro run", module_blocked_payload["next"]["recommended"])
 
+    def test_status_includes_skills_projection(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(root, "status", "--json")
+            self.assertEqual(payload["status"], "ok")
+            self.assertIn("skills", payload)
+            self.assertEqual(payload["skills"]["status"], "ok")
+            self.assertEqual(payload["skills"]["missing"], [])
+            self.assertEqual(payload["skills"]["modified"], [])
+            self.assertEqual(payload["skills"]["stale"], [])
+
+    def test_status_next_prefers_skills_generate_when_skills_are_drifted(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            skill_files = sorted((root / ".agents" / "skills").rglob("SKILL.md"))
+            self.assertTrue(skill_files)
+            first_skill = skill_files[0]
+            first_skill.write_text(first_skill.read_text(encoding="utf-8") + "\nDRIFT\n", encoding="utf-8")
+
+            payload = run_cli(root, "status", "--json")
+            self.assertEqual(payload["skills"]["status"], "failed")
+            self.assertEqual(payload["next"]["recommended"], "csk skills generate")
+
     def test_module_alias_dashboard_and_cd_hint(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -334,6 +368,24 @@ class UnitTests(unittest.TestCase):
             generated = (out / "alpha" / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("GENERATED: do not edit by hand", generated)
             self.assertIn("override", generated)
+
+    def test_skills_generate_is_deterministic(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "skills", "generate")
+            digest_first = tree_digest(root / ".agents" / "skills")
+            run_cli(root, "skills", "generate")
+            digest_second = tree_digest(root / ".agents" / "skills")
+            self.assertEqual(digest_first, digest_second)
+
+    def test_skills_templates_include_next_block(self) -> None:
+        skills_src = REPO_ROOT / "engine" / "python" / "csk_next" / "assets" / "engine_pack" / "skills_src"
+        files = sorted(skills_src.rglob("SKILL.md"))
+        self.assertTrue(files)
+        for path in files:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("NEXT:", text, msg=str(path))
 
     def test_task_transition_map_rejects_illegal_skip(self) -> None:
         with self.assertRaises(ValueError):
@@ -701,6 +753,26 @@ class UnitTests(unittest.TestCase):
             )
             self.assertEqual(payload["status"], "error")
             self.assertIn("Retro requires task status", payload["error"])
+            self.assertIn("next", payload)
+
+    def test_approve_error_includes_next_for_user_flow(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(
+                root,
+                "approve",
+                "--module-id",
+                "root",
+                "--task-id",
+                "T-0001",
+                "--approved-by",
+                "tester",
+                expect_code=2,
+            )
+            self.assertEqual(payload["status"], "error")
+            self.assertIn("next", payload)
+            self.assertIn("recommended", payload["next"])
 
     def test_replay_exit_code_30_on_invariant_violation(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -718,6 +790,15 @@ class UnitTests(unittest.TestCase):
             replay = run_cli(root, "replay", "--check", expect_code=30)
             self.assertEqual(replay["status"], "replay_failed")
             self.assertGreater(len(replay["replay"]["violations"]), 0)
+
+    def test_replay_error_includes_next_for_user_flow(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(root, "replay", expect_code=2)
+            self.assertEqual(payload["status"], "error")
+            self.assertIn("next", payload)
+            self.assertEqual(payload["next"]["recommended"], "csk replay --check")
 
     def test_completion_prints_raw_script(self) -> None:
         with TemporaryDirectory() as temp_dir:

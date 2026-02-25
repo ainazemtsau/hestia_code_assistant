@@ -9,6 +9,7 @@ from csk_next.domain.state import ensure_registry, find_module
 from csk_next.eventlog.store import tail_events
 from csk_next.io.files import read_json
 from csk_next.runtime.paths import Layout
+from csk_next.skills.generator import validate_generated_skills
 
 
 _PHASE_BY_TASK_STATUS: dict[str, str] = {
@@ -173,9 +174,44 @@ def _module_projection(layout: Layout, module_row: dict[str, Any], worktrees: di
     return projection
 
 
-def _status_next(modules: list[dict[str, Any]], mission: dict[str, Any] | None, bootstrapped: bool) -> dict[str, Any]:
+def _skills_projection(layout: Layout, bootstrapped: bool) -> dict[str, Any]:
+    if not bootstrapped:
+        return {
+            "status": "failed",
+            "missing": [],
+            "modified": [],
+            "stale": [],
+            "recommended": "csk bootstrap",
+        }
+    check = validate_generated_skills(
+        engine_skills_src=layout.engine / "skills_src",
+        local_override=layout.local / "skills_override",
+        output_dir=layout.agents_skills,
+    )
+    status = str(check.get("status", "failed"))
+    return {
+        "status": status,
+        "missing": list(check.get("missing", [])),
+        "modified": list(check.get("modified", [])),
+        "stale": list(check.get("stale", [])),
+        "recommended": "csk skills generate" if status != "ok" else None,
+    }
+
+
+def _status_next(
+    modules: list[dict[str, Any]],
+    mission: dict[str, Any] | None,
+    bootstrapped: bool,
+    skills: dict[str, Any],
+) -> dict[str, Any]:
     if not bootstrapped:
         return {"recommended": "csk bootstrap", "alternatives": ["csk status --json"]}
+
+    if str(skills.get("status")) != "ok":
+        return {
+            "recommended": str(skills.get("recommended") or "csk skills generate"),
+            "alternatives": ["csk validate --skills", "csk status --json"],
+        }
 
     for module in modules:
         if module["phase"] == "PLAN_FROZEN" and module["active_task_id"]:
@@ -253,7 +289,8 @@ def project_root_status(layout: Layout) -> dict[str, Any]:
     worktrees = _worktree_map(layout, mission["mission_id"] if mission else None)
     modules = [_module_projection(layout, row, worktrees) for row in registry["modules"]]
     latest_events = tail_events(layout=layout, n=1)
-    next_block = _status_next(modules, mission, bootstrapped)
+    skills = _skills_projection(layout, bootstrapped)
+    next_block = _status_next(modules, mission, bootstrapped, skills)
 
     return {
         "status": "ok",
@@ -264,6 +301,7 @@ def project_root_status(layout: Layout) -> dict[str, Any]:
             "modules_total": len(modules),
         },
         "modules": modules,
+        "skills": skills,
         "latest_event": latest_events[0] if latest_events else None,
         "next": next_block,
     }

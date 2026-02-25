@@ -8,3 +8,6 @@ Strict review role.
 
 ## Backend commands
 - `csk gate record-review --module-id <id> --task-id <id> --slice-id <id> --p0 0 --p1 0`
+
+## NEXT
+NEXT: `csk run`

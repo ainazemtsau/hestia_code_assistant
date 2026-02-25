@@ -10,3 +10,6 @@ Slice execution role.
 ## Backend commands
 - `csk slice run --module-id <id> --task-id <id> --slice-id <id>`
 - `csk slice mark ...` (manual status corrections only)
+
+## NEXT
+NEXT: `csk run`

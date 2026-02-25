@@ -25,18 +25,19 @@ If sources conflict: this delta file wins for v0.1.1 behavior.
 4. Worktree creation may fallback with incident logging instead of hard-failing mission creation.
 5. Public CLI follows docpack UX; current internal command groups remain supported during migration until P18.
 6. `--json` machine output remains supported for automation and tests.
+7. User-facing CLI error payloads include actionable `next` guidance; internal API groups keep strict machine-centric payloads.
 
 ## Phase Policy
 Phases still execute strictly in order `P00 -> P18`, but interpreted through the accepted deltas above.
 
 Status baseline on 2026-02-25 (current repository state):
-- Done: `P00`, `P01`, `P02`, `P03`, `P04`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P11`, `P12`, `P13`, `P14`, `P15`, `P16`, `P18`
-- Partial/diverged: `P17`
+- Done: `P00`, `P01`, `P02`, `P03`, `P04`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P11`, `P12`, `P13`, `P14`, `P15`, `P16`, `P17`, `P18`
+- Partial/diverged: none
 - Gaps: none
 
 Priority queue:
-1. `P17` Skills template UX polish
-2. Stabilization hardening and backward-compatibility checks through `P18`
+1. Stabilization hardening and backward-compatibility checks through `P18`
+2. Maintain local gate-pack discipline before merge
 
 ## Definition of Done Per Phase
 A phase is complete only when all are true:
