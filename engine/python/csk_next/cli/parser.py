@@ -15,7 +15,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="State root path (default: --root or CSK_STATE_ROOT env var)",
     )
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
+    parser.set_defaults(command="status", handler=handlers.cmd_status)
+
+    status_p = sub.add_parser("status")
+    status_p.add_argument("--json", action="store_true")
+    status_p.set_defaults(handler=handlers.cmd_status)
 
     run_p = sub.add_parser("run", help="Run the interactive wizard-first workflow")
     run_p.add_argument("--request", help="Optional request text for scripted wizard run")

@@ -44,6 +44,8 @@
 | R32 | Internal event API via CLI (`event append`, `event tail`) with scope filters | `cli/parser.py`, `cli/handlers.py`, `eventlog/store.py` | `test_event_append_and_tail_filters` |
 | R33 | Registry detect + module list/show commands | `runtime/modules.py`, `cli/parser.py`, `cli/handlers.py` | `test_bootstrap_runs_registry_detect_when_empty`, `test_registry_detect_fallback_root_module` |
 | R34 | Bootstrap auto-runs registry detect only when registry is empty | `runtime/bootstrap.py`, `runtime/modules.py` | `test_bootstrap_runs_registry_detect_when_empty`, `test_registry_detect_fallback_root_module` |
+| R35 | Root status projection from SSOT state with `csk` (no args) aliasing `status` | `runtime/status.py`, `cli/parser.py`, `cli/handlers.py` | `test_status_alias_without_command_and_phase_projection` |
+| R36 | Module dashboard (`csk module <id>`) exposes phase/task/slice, NEXT, and `cd` hint when worktree mapping exists | `cli/main.py`, `runtime/status.py`, `cli/handlers.py` | `test_module_alias_dashboard_and_cd_hint` |
 
 ## Coverage Status
 

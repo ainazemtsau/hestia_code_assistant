@@ -13,6 +13,8 @@ from tempfile import TemporaryDirectory
 from csk_next.domain.models import ensure_task_transition
 from csk_next.domain.schemas import SchemaValidationError, validate_schema
 from csk_next.profiles.manager import merge_profile
+from csk_next.runtime.paths import resolve_layout
+from csk_next.runtime.tasks_engine import mark_task_blocked, mark_task_status
 from csk_next.skills.generator import generate_skills
 
 
@@ -166,6 +168,88 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(len(module_list_payload["modules"]), 1)
             self.assertEqual(module_list_payload["modules"][0]["module_id"], "root")
             self.assertEqual(module_list_payload["modules"][0]["root_path"], ".")
+
+    def test_status_alias_without_command_and_phase_projection(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+
+            status_payload = run_cli(root)
+            self.assertEqual(status_payload["status"], "ok")
+            self.assertTrue(status_payload["summary"]["bootstrapped"])
+            app_row = next(row for row in status_payload["modules"] if row["module_id"] == "app")
+            self.assertEqual(app_row["phase"], "PLANNING")
+            self.assertEqual(app_row["active_task_id"], task_id)
+            self.assertIn("task critic", status_payload["next"]["recommended"])
+
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+
+            critic_passed_payload = run_cli(root, "status", "--json")
+            critic_passed_row = next(row for row in critic_passed_payload["modules"] if row["module_id"] == "app")
+            self.assertEqual(critic_passed_row["phase"], "PLANNING")
+            self.assertEqual(critic_passed_row["task_status"], "critic_passed")
+            self.assertIn("task freeze", critic_passed_payload["next"]["recommended"])
+
+            module_critic_payload = run_cli(root, "module", "status", "--module-id", "app")
+            self.assertEqual(module_critic_payload["module"]["phase"], "PLANNING")
+            self.assertIn("task freeze", module_critic_payload["next"]["recommended"])
+
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+
+            frozen_payload = run_cli(root, "status", "--json")
+            frozen_row = next(row for row in frozen_payload["modules"] if row["module_id"] == "app")
+            self.assertEqual(frozen_row["phase"], "PLAN_FROZEN")
+            self.assertIn("approve-plan", frozen_payload["next"]["recommended"])
+
+            run_cli(root, "task", "approve-plan", "--module-id", "app", "--task-id", task_id, "--approved-by", "tester")
+            layout = resolve_layout(root)
+            mark_task_status(layout, "modules/app", task_id, "executing")
+            mark_task_blocked(layout, "modules/app", task_id, "verify retries exceeded")
+
+            blocked_payload = run_cli(root, "status", "--json")
+            blocked_row = next(row for row in blocked_payload["modules"] if row["module_id"] == "app")
+            self.assertEqual(blocked_row["phase"], "BLOCKED")
+            self.assertIn("retro run", blocked_payload["next"]["recommended"])
+
+            module_blocked_payload = run_cli(root, "module", "status", "--module-id", "app")
+            self.assertEqual(module_blocked_payload["module"]["phase"], "BLOCKED")
+            self.assertIn("retro run", module_blocked_payload["next"]["recommended"])
+
+    def test_module_alias_dashboard_and_cd_hint(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            run_cli(
+                root,
+                "mission",
+                "new",
+                "--title",
+                "Demo Mission",
+                "--summary",
+                "Status projection test",
+                "--modules",
+                "app",
+            )
+
+            alias_payload = run_cli(root, "module", "app")
+            self.assertEqual(alias_payload["status"], "ok")
+            self.assertEqual(alias_payload["module"]["module_id"], "app")
+            self.assertEqual(alias_payload["module"]["phase"], "PLANNING")
+            self.assertIsNotNone(alias_payload["module"]["worktree_path"])
+            self.assertIsNotNone(alias_payload["cd_hint"])
+            self.assertTrue(alias_payload["cd_hint"].startswith("cd "))
+            self.assertIn("task critic", alias_payload["next"]["recommended"])
+
+            status_payload = run_cli(root, "module", "status", "--module-id", "app")
+            self.assertEqual(status_payload["status"], "ok")
+            self.assertEqual(status_payload["module"]["module_id"], "app")
+            self.assertEqual(status_payload["module"]["phase"], alias_payload["module"]["phase"])
 
     def test_external_state_root_keeps_repo_without_runtime_dirs(self) -> None:
         with TemporaryDirectory() as temp_dir, TemporaryDirectory() as state_dir:

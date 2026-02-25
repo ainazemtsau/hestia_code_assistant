@@ -32,6 +32,7 @@ from csk_next.runtime.paths import Layout, resolve_layout
 from csk_next.runtime.proofs import proof_dir
 from csk_next.runtime.retro import run_retro
 from csk_next.runtime.state_migration import migrate_state
+from csk_next.runtime.status import project_module_status, project_root_status
 from csk_next.runtime.slices import slice_mark, slice_run
 from csk_next.runtime.tasks import ready_approval_path, task_dir, task_run_dir
 from csk_next.runtime.tasks_engine import (
@@ -71,6 +72,11 @@ def _parse_argv(raw: str | None) -> list[str] | None:
 def cmd_bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     return bootstrap(layout)
+
+
+def cmd_status(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return project_root_status(layout)
 
 
 def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
@@ -127,7 +133,9 @@ def cmd_module_init(args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_module_status(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
-    return module_status(layout, args.module_id)
+    if args.module_id is None:
+        return project_root_status(layout)
+    return project_module_status(layout, args.module_id)
 
 
 def cmd_intake(args: argparse.Namespace) -> dict[str, Any]:

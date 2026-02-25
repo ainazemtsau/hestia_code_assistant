@@ -12,8 +12,53 @@ from csk_next.eventlog.store import append_event
 from csk_next.runtime.paths import resolve_layout
 
 
+_MODULE_SUBCOMMANDS = {"list", "show", "add", "init", "status"}
+
+
 def _print(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def _find_command_index(argv: list[str]) -> int | None:
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token in {"--root", "--state-root"}:
+            index += 2
+            continue
+        if token.startswith("--root=") or token.startswith("--state-root="):
+            index += 1
+            continue
+        if token.startswith("-"):
+            index += 1
+            continue
+        return index
+    return None
+
+
+def _rewrite_user_aliases(argv: list[str]) -> list[str]:
+    command_index = _find_command_index(argv)
+    if command_index is None:
+        return argv
+
+    if argv[command_index] != "module":
+        return argv
+
+    target_index = command_index + 1
+    if target_index >= len(argv):
+        return argv
+
+    target = argv[target_index]
+    if target.startswith("-") or target in _MODULE_SUBCOMMANDS:
+        return argv
+
+    return [
+        *argv[:target_index],
+        "status",
+        "--module-id",
+        target,
+        *argv[target_index + 1 :],
+    ]
 
 
 def _command_name(args: argparse.Namespace) -> str:
@@ -52,8 +97,9 @@ def _command_scope(args: argparse.Namespace) -> dict[str, str | None]:
 
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else list(sys.argv[1:])
+    parsed_argv = _rewrite_user_aliases(raw_argv)
     parser = build_parser()
-    args = parser.parse_args(raw_argv)
+    args = parser.parse_args(parsed_argv)
 
     handler: Callable[[argparse.Namespace], dict[str, Any]] = args.handler
     layout = resolve_layout(args.root, args.state_root)

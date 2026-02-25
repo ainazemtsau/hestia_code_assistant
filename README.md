@@ -60,6 +60,8 @@ Blocking invariants:
   - `slice run|mark`
   - `gate scope-check|verify|record-review|validate-ready|approve-ready`
 - Mission/module:
+  - `status` (or no command arguments)
+  - `module <id>` (alias for `module status --module-id <id>`)
   - `module list|show|add|init|status`
   - `mission new|status|spawn-milestone`
 - Operations:

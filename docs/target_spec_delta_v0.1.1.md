@@ -32,16 +32,15 @@ If sources conflict: this delta file wins for v0.1.1 behavior.
 Phases still execute strictly in order `P00 -> P18`, but interpreted through the accepted deltas above.
 
 Status baseline on 2026-02-25:
-- Implemented: `P00`, `P02`, `P03`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P12`, `P13`
+- Implemented: `P00`, `P02`, `P03`, `P04`, `P05`, `P06`, `P07`, `P08`, `P09`, `P10`, `P12`, `P13`
 - Partial/diverged: `P01`, `P11`, `P17`
-- Gaps: `P04`, `P14`, `P15`, `P16`, `P18`
+- Gaps: `P14`, `P15`, `P16`, `P18`
 
 Priority queue:
-1. `P04` status projection/dashboard from SSOT
-2. `P14` Context Builder v1
-3. `P15` PKM v0
-4. `P16` Replay check
-5. `P18` completion/help ergonomics
+1. `P14` Context Builder v1
+2. `P15` PKM v0
+3. `P16` Replay check
+4. `P18` completion/help ergonomics
 
 ## Definition of Done Per Phase
 A phase is complete only when all are true:
