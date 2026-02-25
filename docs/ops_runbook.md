@@ -85,6 +85,13 @@ Doctor diagnostics:
 ... doctor run --git-boundary
 ```
 
+Event log diagnostics:
+
+```bash
+... event tail --n 20
+... event append --type custom.note --payload '{"note":"manual marker"}'
+```
+
 Legacy migration to external state root:
 
 ```bash

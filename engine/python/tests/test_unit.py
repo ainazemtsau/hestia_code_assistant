@@ -20,9 +20,17 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PYTHONPATH = str(REPO_ROOT / "engine" / "python")
 
 
-def run_cli(root: Path, *args: str, expect_code: int = 0, state_root: Path | None = None) -> dict:
+def run_cli(
+    root: Path,
+    *args: str,
+    expect_code: int = 0,
+    state_root: Path | None = None,
+    env_overrides: dict[str, str] | None = None,
+) -> dict:
     env = dict(os.environ)
     env["PYTHONPATH"] = PYTHONPATH
+    if env_overrides:
+        env.update(env_overrides)
     command = [sys.executable, "-m", "csk_next.cli.main", "--root", str(root)]
     if state_root is not None:
         command.extend(["--state-root", str(state_root)])
@@ -442,6 +450,75 @@ class UnitTests(unittest.TestCase):
             )
             self.assertEqual(payload["status"], "failed")
             self.assertFalse(payload["proof"]["passed"])
+
+    def test_event_log_bootstrap_started_completed_and_idempotent(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "bootstrap")
+
+            tail = run_cli(root, "event", "tail", "--n", "20")
+            self.assertEqual(tail["status"], "ok")
+            bootstrap_events = [
+                row for row in tail["events"] if row.get("payload", {}).get("command") == "bootstrap"
+            ]
+            self.assertEqual(len(bootstrap_events), 4)
+            self.assertEqual(
+                sorted(row["type"] for row in bootstrap_events),
+                ["command.completed", "command.completed", "command.started", "command.started"],
+            )
+
+    def test_event_append_and_tail_filters(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(
+                root,
+                "event",
+                "append",
+                "--type",
+                "plan.drafted",
+                "--actor",
+                "assistant:coder",
+                "--module-id",
+                "app",
+                "--task-id",
+                "T-0001",
+                "--payload",
+                '{"reason":"seed"}',
+                "--artifact-ref",
+                "tasks/T-0001/plan.md",
+            )
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["event"]["type"], "plan.drafted")
+
+            tail = run_cli(root, "event", "tail", "--n", "5", "--type", "plan.drafted")
+            self.assertEqual(tail["status"], "ok")
+            self.assertEqual(len(tail["events"]), 1)
+            event = tail["events"][0]
+            self.assertEqual(event["type"], "plan.drafted")
+            self.assertEqual(event["actor"], "assistant:coder")
+            self.assertEqual(event["module_id"], "app")
+            self.assertEqual(event["task_id"], "T-0001")
+            self.assertEqual(event["payload"]["reason"], "seed")
+            self.assertEqual(event["artifact_refs"], ["tasks/T-0001/plan.md"])
+
+    def test_event_log_does_not_crash_without_git_in_path(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            env = {"PATH": "/tmp"}
+            bootstrap = run_cli(root, "bootstrap", env_overrides=env)
+            self.assertEqual(bootstrap["status"], "ok")
+
+            tail = run_cli(root, "event", "tail", "--n", "20", env_overrides=env)
+            self.assertEqual(tail["status"], "ok")
+            bootstrap_started = [
+                row
+                for row in tail["events"]
+                if row["type"] == "command.started" and row.get("payload", {}).get("command") == "bootstrap"
+            ]
+            self.assertEqual(len(bootstrap_started), 1)
+            self.assertIsNone(bootstrap_started[0]["repo_git_head"])
 
 
 if __name__ == "__main__":

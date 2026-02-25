@@ -200,6 +200,32 @@ def build_parser() -> argparse.ArgumentParser:
     gate_approve_p.add_argument("--approved-by", required=True)
     gate_approve_p.set_defaults(handler=handlers.cmd_gate_approve_ready)
 
+    event_p = sub.add_parser("event")
+    event_sub = event_p.add_subparsers(dest="event_cmd", required=True)
+
+    event_append_p = event_sub.add_parser("append")
+    event_append_p.add_argument("--type", required=True)
+    event_append_p.add_argument("--actor", default="engine")
+    event_append_p.add_argument("--mission-id")
+    event_append_p.add_argument("--module-id")
+    event_append_p.add_argument("--task-id")
+    event_append_p.add_argument("--slice-id")
+    event_append_p.add_argument("--payload", default="{}")
+    event_append_p.add_argument("--artifact-ref", action="append", default=[])
+    event_append_p.add_argument("--worktree-path")
+    event_append_p.add_argument("--repo-git-head")
+    event_append_p.add_argument("--engine-version")
+    event_append_p.set_defaults(handler=handlers.cmd_event_append)
+
+    event_tail_p = event_sub.add_parser("tail")
+    event_tail_p.add_argument("--n", type=int, default=20)
+    event_tail_p.add_argument("--type")
+    event_tail_p.add_argument("--mission-id")
+    event_tail_p.add_argument("--module-id")
+    event_tail_p.add_argument("--task-id")
+    event_tail_p.add_argument("--slice-id")
+    event_tail_p.set_defaults(handler=handlers.cmd_event_tail)
+
     incident_p = sub.add_parser("incident")
     incident_sub = incident_p.add_subparsers(dest="incident_cmd", required=True)
 
@@ -242,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_p = sub.add_parser("doctor")
     doctor_sub = doctor_p.add_subparsers(dest="doctor_cmd", required=True)
     doctor_run_p = doctor_sub.add_parser("run")
-    doctor_run_p.add_argument("--command", action="append", default=[])
+    doctor_run_p.add_argument("--command", dest="doctor_commands", action="append", default=[])
     doctor_run_p.add_argument(
         "--git-boundary",
         action="store_true",

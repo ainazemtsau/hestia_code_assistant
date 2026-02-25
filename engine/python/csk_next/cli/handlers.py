@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shlex
 from typing import Any
 
 from csk_next.doctor.run import run_doctor
 from csk_next.domain.state import ensure_registry, find_module
+from csk_next.eventlog.store import append_event, tail_events
 from csk_next.gates.ready import validate_ready
 from csk_next.gates.review import record_review
 from csk_next.gates.scope import check_scope
@@ -331,6 +333,43 @@ def cmd_gate_approve_ready(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def cmd_event_append(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    payload = json.loads(args.payload)
+    if not isinstance(payload, dict):
+        raise ValueError("event payload must be a JSON object")
+
+    event = append_event(
+        layout=layout,
+        event_type=args.type,
+        actor=args.actor,
+        mission_id=args.mission_id,
+        module_id=args.module_id,
+        task_id=args.task_id,
+        slice_id=args.slice_id,
+        payload=payload,
+        artifact_refs=args.artifact_ref,
+        worktree_path=args.worktree_path,
+        repo_git_head=args.repo_git_head,
+        engine_version=args.engine_version,
+    )
+    return {"status": "ok", "event": event}
+
+
+def cmd_event_tail(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    events = tail_events(
+        layout=layout,
+        n=args.n,
+        event_type=args.type,
+        mission_id=args.mission_id,
+        module_id=args.module_id,
+        task_id=args.task_id,
+        slice_id=args.slice_id,
+    )
+    return {"status": "ok", "events": events}
+
+
 def cmd_incident_add(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     incident = make_incident(
@@ -371,4 +410,4 @@ def cmd_migrate_state(args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_doctor_run(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
-    return run_doctor(layout, args.command, git_boundary=args.git_boundary)
+    return run_doctor(layout, args.doctor_commands, git_boundary=args.git_boundary)

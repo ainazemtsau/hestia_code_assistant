@@ -39,6 +39,9 @@
 | R27 | READY uses merged engine+local profile | `cli/handlers.py::cmd_gate_validate_ready`, `profiles/manager.py` | `test_ready_uses_local_profile_override` |
 | R28 | Mission validates module ids even with `--no-task-stubs` | `runtime/missions.py` pre-validates all module ids | `test_mission_rejects_unknown_modules` |
 | R29 | Worktree policy operationalized with fallback tracking | `runtime/worktrees.py`, `runtime/missions.py` create_status/fallback | `test_worktree_create_success_in_git_repo`, `test_worktree_failure_fallback_incident` |
+| R30 | Event Log v1 in SQLite (`.csk/app/eventlog.sqlite`) with append-only table + indices | `eventlog/store.py` | `test_event_log_bootstrap_started_completed_and_idempotent` |
+| R31 | Command wrapper emits `command.started`/`command.completed` for CLI invocations | `cli/main.py`, `eventlog/store.py` | `test_event_log_bootstrap_started_completed_and_idempotent` |
+| R32 | Internal event API via CLI (`event append`, `event tail`) with scope filters | `cli/parser.py`, `cli/handlers.py`, `eventlog/store.py` | `test_event_append_and_tail_filters` |
 
 ## Coverage Status
 

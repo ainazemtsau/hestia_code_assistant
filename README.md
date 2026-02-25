@@ -62,6 +62,7 @@ Blocking invariants:
   - `module add|init|status`
   - `mission new|status|spawn-milestone`
 - Operations:
+  - `event append|tail`
   - `incident add`
   - `retro run`
   - `validate --all --strict`
@@ -74,6 +75,7 @@ Blocking invariants:
 - `validate --all --strict`: lifecycle and artifact consistency diagnostics.
 - `doctor run --command <name>`: environment dependency checks.
 - `doctor run --git-boundary`: warn about tracked/pending files that should not go to product Git.
+- `event tail --n <N>`: inspect latest SSOT events for command/gate tracing.
 - Incident trail:
   - global: `<state-root>/.csk/app/logs/incidents.jsonl`
   - module proofs: `<state-root>/.csk/modules/<module_path>/run/tasks/T-####/proofs/`

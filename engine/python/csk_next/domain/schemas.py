@@ -31,6 +31,7 @@ SCHEMAS: dict[str, SchemaDef] = {
     "ready_proof": SchemaDef(("task_id", "passed", "checks", "checked_at")),
     "incident": SchemaDef(("id", "severity", "kind", "phase", "message", "created_at")),
     "profile": SchemaDef(("name", "required_gates", "e2e", "recommended")),
+    "event_envelope": SchemaDef(("id", "ts", "type", "actor", "payload", "artifact_refs", "engine_version")),
 }
 
 
@@ -223,6 +224,28 @@ def _validate_verify_proof(data: dict[str, Any]) -> None:
             raise SchemaValidationError("executed_count must be >= 0")
 
 
+def _validate_event_envelope(data: dict[str, Any]) -> None:
+    _require_type(data["id"], str, "id")
+    _require_type(data["ts"], str, "ts")
+    _require_type(data["type"], str, "type")
+    _require_type(data["actor"], str, "actor")
+    _require_type(data["payload"], dict, "payload")
+    _require_list_of_str(data["artifact_refs"], "artifact_refs")
+    _require_type(data["engine_version"], str, "engine_version")
+
+    for optional_field in [
+        "mission_id",
+        "module_id",
+        "task_id",
+        "slice_id",
+        "repo_git_head",
+        "worktree_path",
+    ]:
+        value = data.get(optional_field)
+        if value is not None and not isinstance(value, str):
+            raise SchemaValidationError(f"Field '{optional_field}' must be string or null")
+
+
 EXTRA_VALIDATORS = {
     "registry": _validate_registry,
     "task_state": _validate_task_state,
@@ -230,6 +253,7 @@ EXTRA_VALIDATORS = {
     "mission_worktrees": _validate_mission_worktrees,
     "profile": _validate_profile,
     "verify_proof": _validate_verify_proof,
+    "event_envelope": _validate_event_envelope,
 }
 
 
