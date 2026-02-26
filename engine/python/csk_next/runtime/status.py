@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from csk_next.domain.state import ensure_registry, find_module
+from csk_next.domain.state import ensure_registry
 from csk_next.eventlog.store import tail_events
 from csk_next.io.files import read_json
 from csk_next.runtime.paths import Layout
@@ -50,6 +50,19 @@ def _safe_read_json(path: Path) -> dict[str, Any] | None:
         return read_json(path)
     except Exception:  # noqa: BLE001
         return None
+
+
+def _kernel_version(layout: Layout, module_path: str) -> str | None:
+    kernel = _safe_read_json(layout.module_kernel(module_path) / "kernel.json")
+    if not isinstance(kernel, dict):
+        return None
+    schema_version = kernel.get("schema_version")
+    if isinstance(schema_version, str):
+        return schema_version
+    kernel_version = kernel.get("kernel_version")
+    if isinstance(kernel_version, str):
+        return kernel_version
+    return None
 
 
 def _task_sort_key(state: dict[str, Any]) -> tuple[str, str]:
@@ -167,7 +180,9 @@ def _module_projection(layout: Layout, module_row: dict[str, Any], worktrees: di
     projection = {
         "module_id": module_id,
         "path": module_path,
+        "registered": bool(module_row.get("registered", True)),
         "initialized": bool(module_row.get("initialized", False)),
+        "kernel_version": _kernel_version(layout, module_path),
         "phase": phase,
         "active_task_id": active_task_id,
         "active_task_updated_at": str(active.get("updated_at")) if active else None,
@@ -366,6 +381,18 @@ def project_root_status(layout: Layout) -> dict[str, Any]:
 
 def _module_next(module_projection: dict[str, Any]) -> dict[str, Any]:
     module_id = module_projection["module_id"]
+    if not bool(module_projection.get("registered", False)):
+        return {
+            "recommended": f"csk module add --path <repo-relative-path> --module-id {module_id}",
+            "alternatives": ["csk module list", "csk status --json"],
+        }
+
+    if not bool(module_projection.get("initialized", False)):
+        return {
+            "recommended": f"csk module init --module-id {module_id} --write-scaffold",
+            "alternatives": [f"csk module {module_id}", "csk status --json"],
+        }
+
     task_id = module_projection["active_task_id"]
     phase = module_projection["phase"]
     if phase in {"PLAN_FROZEN", "READY_VALIDATED"} and task_id:
@@ -389,17 +416,41 @@ def _module_next(module_projection: dict[str, Any]) -> dict[str, Any]:
 def project_module_status(layout: Layout, module_id: str) -> dict[str, Any]:
     root_projection = project_root_status(layout)
     registry = ensure_registry(layout.registry)
-    module_row = find_module(registry, module_id)
-    module_proj = None
-    for row in root_projection["modules"]:
-        if row["module_id"] == module_id:
-            module_proj = row
-            break
-    if module_proj is None:
+    module_row = next(
+        (row for row in registry["modules"] if str(row.get("module_id")) == module_id),
+        None,
+    )
+    module_proj = next(
+        (row for row in root_projection["modules"] if str(row.get("module_id")) == module_id),
+        None,
+    )
+    if module_row is None:
         module_proj = {
             "module_id": module_id,
-            "path": module_row["path"],
+            "path": None,
+            "registered": False,
+            "initialized": False,
+            "kernel_version": None,
+            "phase": "UNREGISTERED",
+            "active_task_id": None,
+            "active_task_updated_at": None,
+            "active_slice_id": None,
+            "slices_done": 0,
+            "slices_total": 0,
+            "task_status": None,
+            "blocked_reason": None,
+            "worktree_path": None,
+            "active_plan_path": None,
+            "active_slices_path": None,
+        }
+    elif module_proj is None:
+        module_path = str(module_row.get("path"))
+        module_proj = {
+            "module_id": module_id,
+            "path": module_path,
+            "registered": bool(module_row.get("registered", True)),
             "initialized": bool(module_row.get("initialized", False)),
+            "kernel_version": _kernel_version(layout, module_path),
             "phase": "IDLE",
             "active_task_id": None,
             "active_task_updated_at": None,

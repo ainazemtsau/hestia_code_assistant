@@ -65,6 +65,7 @@ def _module_view(module: dict[str, Any]) -> dict[str, Any]:
         "root_path": root_path,
         "keywords": keywords,
         "path": str(module.get("path", root_path)),
+        "registered": bool(module.get("registered", True)),
         "initialized": bool(module.get("initialized", False)),
     }
 
@@ -137,6 +138,7 @@ def module_init(layout: Layout, module_id: str, write_scaffold: bool = False) ->
     module = find_module(registry, module_id)
     module_path = module["path"]
     root = layout.module_root(module_path)
+    already_initialized = bool(module.get("initialized", False))
 
     ensure_dir(root)
     ensure_dir(layout.module_kernel(module_path))
@@ -144,6 +146,7 @@ def module_init(layout: Layout, module_id: str, write_scaffold: bool = False) ->
     ensure_dir(layout.module_run(module_path))
 
     kernel_path = layout.module_kernel(module_path) / "kernel.json"
+    kernel_created = False
     if not kernel_path.exists():
         write_json(
             kernel_path,
@@ -154,32 +157,62 @@ def module_init(layout: Layout, module_id: str, write_scaffold: bool = False) ->
                 "created_at": utc_now_iso(),
             },
         )
+        kernel_created = True
 
+    module_agents = root / "AGENTS.md"
+    public_api = root / "PUBLIC_API.md"
+    scaffold_created: list[str] = []
     if write_scaffold:
-        module_agents = root / "AGENTS.md"
         if not module_agents.exists():
             write_text(
                 module_agents,
                 f"# AGENTS.md ({module_id})\n\nUse `$csk` from repository root.\n",
             )
+            scaffold_created.append("AGENTS.md")
 
-        public_api = root / "PUBLIC_API.md"
         if not public_api.exists():
             write_text(
                 public_api,
                 f"# PUBLIC API ({module_id})\n\nDocument externally visible contracts here.\n",
             )
+            scaffold_created.append("PUBLIC_API.md")
 
+    module["registered"] = True
     module["initialized"] = True
     module["updated_at"] = utc_now_iso()
     save_registry(layout.registry, registry)
+
+    artifact_refs = [str(layout.registry), str(kernel_path)]
+    if write_scaffold:
+        artifact_refs.extend([str(module_agents), str(public_api)])
+    append_event(
+        layout=layout,
+        event_type="module.initialized",
+        actor="engine",
+        module_id=module_id,
+        payload={
+            "module_id": module_id,
+            "path": module_path,
+            "registered": True,
+            "initialized": True,
+            "already_initialized": already_initialized,
+            "kernel_created": kernel_created,
+            "write_scaffold": write_scaffold,
+            "scaffold_created": scaffold_created,
+        },
+        artifact_refs=artifact_refs,
+    )
 
     return {
         "status": "ok",
         "module_id": module_id,
         "path": module_path,
+        "registered": True,
         "initialized": True,
+        "already_initialized": already_initialized,
+        "kernel_created": kernel_created,
         "scaffold_written": write_scaffold,
+        "scaffold_created": scaffold_created,
     }
 
 

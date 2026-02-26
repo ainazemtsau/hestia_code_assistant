@@ -46,3 +46,12 @@ Append-only журнал обязательного gate-pack после зав�
 - doctor_git_boundary_status: ok
 - overall: pass
 - notes: Phase-02 status/next model completed with strict user envelope and user-facing NEXT routing.
+
+## Entry 004
+- timestamp_utc: 2026-02-26T12:42:37Z
+- phase_id: phase-03
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Phase-03 module registry/init semantics complete; validate path migrated legacy registry to `registered` field, module status semantics and idempotent init verified.

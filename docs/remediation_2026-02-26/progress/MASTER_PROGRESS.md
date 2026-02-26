@@ -119,3 +119,34 @@ Append-only журнал прогресса remediation-фаз `phase-00..phase-
   - Blocking risks отсутствуют.
 - next_recovery_or_next_phase:
   - Запустить `phase-03-module-registry-init` отдельной сессией.
+
+## Entry 004 (phase-03 done)
+- timestamp_utc: 2026-02-26T12:42:37Z
+- phase_id: phase-03
+- status: done
+- implemented_changes:
+  - Registry/state model разделён на `registered` и `initialized` с миграцией legacy registry.
+  - `csk module status --module-id` расширен до наблюдаемых полей `registered/initialized/path/worktree_path/kernel_version` и actionable `NEXT` для unregistered.
+  - `module init --write-scaffold` сделан наблюдаемо идемпотентным; добавлен event `module.initialized`.
+  - Обновлены acceptance/unit тесты под explicit init semantics и negative paths.
+  - Обновлены phase-03 evidence/progress документы и contract-описание registry.
+- artifacts_paths:
+  - engine/python/csk_next/domain/{models.py,schemas.py,state.py}
+  - engine/python/csk_next/runtime/{modules.py,status.py,validation.py}
+  - engine/python/tests/{test_unit.py,test_acceptance_a_greenfield.py}
+  - docs/CONTRACT.md
+  - docs/remediation_2026-02-26/phase-03-module-registry-init/{MODULE_STATUS_SAMPLES.md,EVIDENCE_INDEX.md,PROGRESS.md}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Первый strict validate выявил legacy registry drift (нет `registered`); устранено через миграцию в validate path.
+- next_recovery_or_next_phase:
+  - Стартовать `phase-04-wizard-scripted-routing` отдельной сессией.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import unittest
@@ -135,6 +136,111 @@ class UnitTests(unittest.TestCase):
             run_cli(root, "module", "init", "--module-id", "app", "--write-scaffold")
             self.assertTrue((root / "modules" / "app" / "AGENTS.md").exists())
             self.assertTrue((root / "modules" / "app" / "PUBLIC_API.md").exists())
+
+    def test_module_status_for_unregistered_module_returns_actionable_next(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+
+            payload = run_cli(root, "module", "status", "--module-id", "ghost")
+            self.assertEqual(payload["status"], "ok")
+            data = user_data(payload)
+            module = data["module"]
+            self.assertFalse(module["registered"])
+            self.assertFalse(module["initialized"])
+            self.assertIsNone(module["path"])
+            self.assertIsNone(module["kernel_version"])
+            self.assertEqual(module["phase"], "UNREGISTERED")
+            self.assertIn("csk module add", payload["next"]["recommended"])
+            self.assertIn("--module-id ghost", payload["next"]["recommended"])
+
+    def test_module_status_for_registered_module_requires_explicit_init(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+
+            before = run_cli(root, "module", "status", "--module-id", "app")
+            before_module = user_data(before)["module"]
+            self.assertTrue(before_module["registered"])
+            self.assertFalse(before_module["initialized"])
+            self.assertIsNone(before_module["kernel_version"])
+            self.assertEqual(before["next"]["recommended"], "csk module init --module-id app --write-scaffold")
+
+            run_cli(root, "module", "init", "--module-id", "app", "--write-scaffold")
+            after = run_cli(root, "module", "status", "--module-id", "app")
+            after_module = user_data(after)["module"]
+            self.assertTrue(after_module["registered"])
+            self.assertTrue(after_module["initialized"])
+            self.assertEqual(after_module["kernel_version"], "1.0.0")
+
+    def test_module_init_is_idempotent_and_emits_initialized_event(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+
+            first = run_cli(root, "module", "init", "--module-id", "app", "--write-scaffold")
+            module_root = root / "modules" / "app"
+            digest_first = tree_digest(module_root)
+
+            second = run_cli(root, "module", "init", "--module-id", "app", "--write-scaffold")
+            digest_second = tree_digest(module_root)
+            self.assertEqual(digest_first, digest_second)
+
+            self.assertFalse(first["already_initialized"])
+            self.assertTrue(first["kernel_created"])
+            self.assertTrue(first["scaffold_written"])
+            self.assertEqual(sorted(first["scaffold_created"]), ["AGENTS.md", "PUBLIC_API.md"])
+
+            self.assertTrue(second["already_initialized"])
+            self.assertFalse(second["kernel_created"])
+            self.assertTrue(second["scaffold_written"])
+            self.assertEqual(second["scaffold_created"], [])
+
+            eventlog = root / ".csk" / "app" / "eventlog.sqlite"
+            with sqlite3.connect(eventlog) as connection:
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM events WHERE type = ? AND module_id = ?",
+                    ("module.initialized", "app"),
+                ).fetchone()[0]
+            self.assertEqual(int(count), 2)
+
+    def test_registry_missing_registered_is_migrated(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            registry_path = root / ".csk" / "app" / "registry.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "1.0.0",
+                        "modules": [
+                            {
+                                "module_id": "root",
+                                "path": ".",
+                                "initialized": False,
+                                "created_at": "2026-02-26T00:00:00Z",
+                                "updated_at": "2026-02-26T00:00:00Z",
+                            }
+                        ],
+                        "defaults": {
+                            "worktree_policy": "per_module",
+                            "proof_storage": "worktree_run",
+                            "user_check": "profile_optional",
+                        },
+                        "updated_at": "2026-02-26T00:00:00Z",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            run_cli(root, "status", "--json")
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            self.assertTrue(registry["modules"][0]["registered"])
 
     def test_module_add_accepts_absolute_path_inside_repo(self) -> None:
         with TemporaryDirectory() as temp_dir:

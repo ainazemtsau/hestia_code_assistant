@@ -28,7 +28,7 @@ phases:
   - phase_id: phase-03
     title: Module registry и init semantics
     dir: phase-03-module-registry-init
-    status: planned
+    status: done
     depends_on: [phase-02]
   - phase_id: phase-04
     title: Wizard scripted mode и materialization

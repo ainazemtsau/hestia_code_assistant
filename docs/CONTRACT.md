@@ -20,7 +20,7 @@
 | --- | --- |
 | `.csk/engine/` | Поставляемый engine pack (templates, skills sources, version). |
 | `.csk/local/` | Локальные override (profiles, skills overrides, hooks, patches, config). |
-| `.csk/app/registry.json` | Реестр модулей (module_id -> module path, initialized). |
+| `.csk/app/registry.json` | Реестр модулей (module_id -> module path, registered/initialized). |
 | `.csk/app/eventlog.sqlite` | SSOT event log для replay/status. |
 | `.csk/app/missions/M-*/` | Артефакты миссий: routing, milestones, worktrees. |
 | `.csk/modules/<module_path>/tasks/T-*/` | Durable task state (`task.json`, `plan.md`, `slices.json`, `freeze.json`, approvals). |
@@ -76,7 +76,7 @@ Hard constraints:
 
 | Artifact | Canonical path | Minimal schema keys |
 | --- | --- | --- |
-| Registry | `.csk/app/registry.json` | `schema_version`, `modules`, `defaults`, `updated_at` |
+| Registry | `.csk/app/registry.json` | `schema_version`, `modules[module_id,path,registered,initialized,created_at,updated_at]`, `defaults`, `updated_at` |
 | Task state | `.csk/modules/<module_path>/tasks/T-*/task.json` | `task_id`, `module_id`, `status`, `profile`, `max_attempts`, `slices` |
 | Slices | `.csk/modules/<module_path>/tasks/T-*/slices.json` | `slices` |
 | Freeze | `.csk/modules/<module_path>/tasks/T-*/freeze.json` | `task_id`, `plan_sha256`, `slices_sha256`, `frozen_at` |

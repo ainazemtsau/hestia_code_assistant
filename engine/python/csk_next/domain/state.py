@@ -12,6 +12,21 @@ from csk_next.io.files import ensure_dir, read_json, write_json
 from csk_next.runtime.time import utc_now_iso
 
 
+def _upgrade_registry(registry: dict[str, Any]) -> bool:
+    changed = False
+    modules = registry.get("modules")
+    if not isinstance(modules, list):
+        return changed
+
+    for module in modules:
+        if not isinstance(module, dict):
+            continue
+        if "registered" not in module:
+            module["registered"] = True
+            changed = True
+    return changed
+
+
 def load_json_validated(path: Path, schema_name: str | None = None) -> dict[str, Any]:
     data = read_json(path)
     if schema_name is not None:
@@ -27,7 +42,12 @@ def save_json_validated(path: Path, data: dict[str, Any], schema_name: str | Non
 
 def ensure_registry(path: Path) -> dict[str, Any]:
     if path.exists():
-        return load_json_validated(path, "registry")
+        registry = read_json(path)
+        if _upgrade_registry(registry):
+            save_json_validated(path, registry, "registry")
+            return registry
+        validate_schema("registry", registry)
+        return registry
     ensure_dir(path.parent)
     registry = new_registry().to_dict()
     save_json_validated(path, registry, "registry")

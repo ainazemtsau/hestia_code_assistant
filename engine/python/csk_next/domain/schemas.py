@@ -68,9 +68,14 @@ def _validate_registry(data: dict[str, Any]) -> None:
     for index, module in enumerate(data["modules"]):
         if not isinstance(module, dict):
             raise SchemaValidationError(f"modules[{index}] must be object")
-        _require_keys(module, ("module_id", "path", "initialized", "created_at", "updated_at"), "registry.module")
+        _require_keys(
+            module,
+            ("module_id", "path", "registered", "initialized", "created_at", "updated_at"),
+            "registry.module",
+        )
         _require_type(module["module_id"], str, f"modules[{index}].module_id")
         _require_type(module["path"], str, f"modules[{index}].path")
+        _require_type(module["registered"], bool, f"modules[{index}].registered")
         _require_type(module["initialized"], bool, f"modules[{index}].initialized")
         module_id = module["module_id"]
         module_path = module["path"]

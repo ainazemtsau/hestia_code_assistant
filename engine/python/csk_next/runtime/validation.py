@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from csk_next.domain.models import TASK_STATUSES
+from csk_next.domain.state import ensure_registry
 from csk_next.domain.schemas import validate_schema
 from csk_next.io.files import read_json
 from csk_next.profiles.manager import load_profile_from_paths
@@ -21,9 +22,8 @@ def _validate_registry(layout: Layout, errors: list[str]) -> dict[str, Any] | No
     if not layout.registry.exists():
         errors.append("missing .csk/app/registry.json")
         return None
-    registry = read_json(layout.registry)
     try:
-        validate_schema("registry", registry)
+        registry = ensure_registry(layout.registry)
     except Exception as exc:  # noqa: BLE001
         errors.append(f"invalid registry: {exc}")
         return None

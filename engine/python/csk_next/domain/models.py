@@ -53,6 +53,7 @@ class ModuleRecord:
 
     module_id: str
     path: str
+    registered: bool
     initialized: bool
     created_at: str
     updated_at: str
@@ -61,6 +62,7 @@ class ModuleRecord:
         return {
             "module_id": self.module_id,
             "path": self.path,
+            "registered": self.registered,
             "initialized": self.initialized,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -125,6 +127,7 @@ def new_module_record(module_id: str, module_path: str) -> ModuleRecord:
     return ModuleRecord(
         module_id=module_id,
         path=normalized,
+        registered=True,
         initialized=False,
         created_at=now,
         updated_at=now,

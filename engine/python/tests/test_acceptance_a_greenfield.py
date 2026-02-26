@@ -124,9 +124,25 @@ def run_acceptance_a_greenfield_scenario(root: Path) -> dict:
     if add["status"] != "ok":
         raise AssertionError(add)
 
+    before_init = run_cli(root, "module", "status", "--module-id", "root")
+    before_init_module = user_data(before_init)["module"]
+    if not bool(before_init_module.get("registered")):
+        raise AssertionError(before_init)
+    if bool(before_init_module.get("initialized")):
+        raise AssertionError(before_init)
+    if before_init["next"]["recommended"] != "csk module init --module-id root --write-scaffold":
+        raise AssertionError(before_init)
+
     init = run_cli(root, "module", "init", "--module-id", "root", "--write-scaffold")
     if init["status"] != "ok":
         raise AssertionError(init)
+
+    after_init = run_cli(root, "module", "status", "--module-id", "root")
+    after_init_module = user_data(after_init)["module"]
+    if not bool(after_init_module.get("initialized")):
+        raise AssertionError(after_init)
+    if str(after_init_module.get("kernel_version", "")) != "1.0.0":
+        raise AssertionError(after_init)
 
     created = run_cli(root, "task", "new", "--module-id", "root", "--slice-count", "2")
     if created["status"] != "ok":
