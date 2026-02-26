@@ -10,6 +10,7 @@ from typing import Any, Callable
 from csk_next.cli.parser import build_parser
 from csk_next.eventlog.store import append_event
 from csk_next.runtime.paths import resolve_layout
+from csk_next.runtime.status import project_module_status, project_root_status
 
 
 _MODULE_SUBCOMMANDS = {"list", "show", "add", "init", "status"}
@@ -34,22 +35,42 @@ def _render_list(values: list[str]) -> str:
     return "; ".join(values)
 
 
+def _payload_data(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return data
+    return payload
+
+
 def _print_status_text(payload: dict[str, Any]) -> None:
+    data = _payload_data(payload)
     summary = payload.get("summary", {})
-    modules = payload.get("modules", [])
-    skills = payload.get("skills", {})
+    if not isinstance(summary, dict):
+        summary = data.get("summary", {}) if isinstance(data.get("summary"), dict) else {}
+    modules = data.get("modules", [])
+    skills = data.get("skills", {})
+    counters = data.get("counters", summary.get("counters", {}))
     next_block = payload.get("next", {})
+    if not isinstance(next_block, dict):
+        next_block = data.get("next", {}) if isinstance(data.get("next"), dict) else {}
     skills_status = "ok" if str(skills.get("status", "ok")) == "ok" else "stale"
-    print("SUMMARY")
+    tasks_by_status = counters.get("tasks_by_status", {}) if isinstance(counters, dict) else {}
+    tasks_total = sum(int(value) for value in tasks_by_status.values()) if isinstance(tasks_by_status, dict) else 0
+
+    print("SUMMARY:")
     print(
+        f"phase={summary.get('project_phase')} "
         f"bootstrapped={summary.get('bootstrapped')} "
         f"mission={summary.get('active_mission_id')} "
         f"milestone={summary.get('active_milestone_id')} "
         f"modules={summary.get('modules_total')} "
-        f"skills={skills_status}"
+        f"skills={skills_status} "
+        f"tasks={tasks_total} "
+        f"proofs={counters.get('proof_packs_total') if isinstance(counters, dict) else 0} "
+        f"retro={counters.get('retro_total') if isinstance(counters, dict) else 0}"
     )
     print("")
-    print("STATUS")
+    print("STATUS:")
     if skills_status != "ok":
         print(
             f"- skills: stale modified={len(skills.get('modified', []))} "
@@ -69,7 +90,7 @@ def _print_status_text(payload: dict[str, Any]) -> None:
                 f"task={module.get('active_task_id')} slice={module.get('active_slice_id')} progress={progress}"
             )
     print("")
-    print("NEXT")
+    print("NEXT:")
     print(next_block.get("recommended", "-"))
     alternatives = next_block.get("alternatives", [])
     if isinstance(alternatives, list) and alternatives:
@@ -77,12 +98,18 @@ def _print_status_text(payload: dict[str, Any]) -> None:
 
 
 def _print_module_text(payload: dict[str, Any]) -> None:
-    module = payload.get("module", {})
+    data = _payload_data(payload)
+    summary = payload.get("summary", {})
+    module = data.get("module", {})
     next_block = payload.get("next", {})
-    print("SUMMARY")
+    if not isinstance(next_block, dict):
+        next_block = data.get("next", {}) if isinstance(data.get("next"), dict) else {}
+    print("SUMMARY:")
     print(f"module={module.get('module_id')} path={module.get('path')}")
+    if isinstance(summary, dict) and summary.get("project_phase"):
+        print(f"project_phase={summary.get('project_phase')}")
     print("")
-    print("STATUS")
+    print("STATUS:")
     print(
         f"phase={module.get('phase')} task={module.get('active_task_id')} "
         f"slice={module.get('active_slice_id')} "
@@ -90,10 +117,10 @@ def _print_module_text(payload: dict[str, Any]) -> None:
     )
     if module.get("blocked_reason"):
         print(f"blocked_reason={module.get('blocked_reason')}")
-    if payload.get("cd_hint"):
-        print(payload["cd_hint"])
+    if data.get("cd_hint"):
+        print(data["cd_hint"])
     print("")
-    print("NEXT")
+    print("NEXT:")
     print(next_block.get("recommended", "-"))
     alternatives = next_block.get("alternatives", [])
     if isinstance(alternatives, list) and alternatives:
@@ -194,32 +221,168 @@ def _error_next(command_name: str, args: argparse.Namespace) -> dict[str, Any] |
     if command_name == "status":
         return {"recommended": "csk run", "alternatives": ["csk status --json"]}
     if command_name == "new":
-        return {"recommended": "csk module list", "alternatives": ["csk status --json"]}
+        return {"recommended": "csk status --json", "alternatives": ["csk run"]}
     if command_name == "run":
         return {"recommended": "csk status --json", "alternatives": ["csk new \"<request>\" --modules <id>"]}
     if command_name == "approve":
         module_id = getattr(args, "module_id", None)
-        task_id = getattr(args, "task_id", None)
-        if module_id and task_id:
-            return {
-                "recommended": f"csk task status --module-id {module_id} --task-id {task_id}",
-                "alternatives": [f"csk module {module_id}", "csk status --json"],
-            }
-        return {"recommended": "csk status --json", "alternatives": ["csk module list"]}
+        if module_id:
+            return {"recommended": f"csk module {module_id}", "alternatives": ["csk status --json"]}
+        return {"recommended": "csk status --json", "alternatives": ["csk run"]}
     if command_name == "module status":
-        return {"recommended": "csk module list", "alternatives": ["csk status --json"]}
+        module_id = getattr(args, "module_id", None)
+        if module_id:
+            return {"recommended": f"csk module {module_id}", "alternatives": ["csk status --json"]}
+        return {"recommended": "csk status --json", "alternatives": ["csk run"]}
     if command_name == "retro run":
         module_id = getattr(args, "module_id", None)
-        task_id = getattr(args, "task_id", None)
-        if module_id and task_id:
-            return {
-                "recommended": f"csk task status --module-id {module_id} --task-id {task_id}",
-                "alternatives": [f"csk module {module_id}", "csk status --json"],
-            }
-        return {"recommended": "csk status --json", "alternatives": ["csk module list"]}
+        if module_id:
+            return {"recommended": f"csk module {module_id}", "alternatives": ["csk status --json"]}
+        return {"recommended": "csk status --json", "alternatives": ["csk run"]}
     if command_name == "replay":
-        return {"recommended": "csk replay --check", "alternatives": ["csk event tail --n 20", "csk status --json"]}
+        return {"recommended": "csk replay --check", "alternatives": ["csk status --json"]}
     return None
+
+
+def _normalize_next(next_block: Any) -> dict[str, Any]:
+    if not isinstance(next_block, dict):
+        return {"recommended": "csk run", "alternatives": ["csk status --json"]}
+    recommended = str(next_block.get("recommended") or "csk run")
+    alternatives_raw = next_block.get("alternatives", [])
+    alternatives = [str(item) for item in alternatives_raw] if isinstance(alternatives_raw, list) else []
+    return {"recommended": recommended, "alternatives": alternatives}
+
+
+def _fallback_next(command_name: str, args: argparse.Namespace) -> dict[str, Any]:
+    layout = resolve_layout(args.root, args.state_root)
+    if command_name == "module status":
+        module_id = getattr(args, "module_id", None)
+        if module_id:
+            try:
+                payload = project_module_status(layout, module_id)
+                return _normalize_next(payload.get("next"))
+            except Exception:  # noqa: BLE001
+                pass
+    try:
+        payload = project_root_status(layout)
+        return _normalize_next(payload.get("next"))
+    except Exception:  # noqa: BLE001
+        return {"recommended": "csk run", "alternatives": ["csk status --json"]}
+
+
+def _summary_block(command_name: str, payload: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    summary = payload.get("summary")
+    if isinstance(summary, dict):
+        return summary
+
+    result: dict[str, Any] = {"command": command_name}
+    for field in ["mission_id", "module_id", "task_id", "slice_id"]:
+        value = getattr(args, field, None)
+        if value is not None:
+            result[field] = value
+    kind = payload.get("kind")
+    if isinstance(kind, str):
+        result["kind"] = kind
+    return result
+
+
+def _collect_refs(payload: dict[str, Any]) -> list[str]:
+    refs: list[str] = []
+    key_hints = {
+        "path",
+        "task_path",
+        "mission_path",
+        "output_dir",
+        "bundle_path",
+        "handoff",
+        "patch_file",
+        "retro_file",
+        "log_path",
+    }
+
+    def visit(node: Any, key: str | None = None) -> None:
+        if isinstance(node, dict):
+            for child_key, child_value in node.items():
+                if child_key == "artifact_refs" and isinstance(child_value, list):
+                    for row in child_value:
+                        if isinstance(row, str) and row.strip():
+                            refs.append(row.strip())
+                    continue
+                visit(child_value, child_key)
+            return
+        if isinstance(node, list):
+            for item in node:
+                visit(item, key)
+            return
+        if isinstance(node, str) and key is not None:
+            if not node.strip():
+                return
+            if key in key_hints or key.endswith("_path") or key.endswith("_file") or key.endswith("_dir"):
+                refs.append(node.strip())
+
+    visit(payload)
+    dedup: list[str] = []
+    seen: set[str] = set()
+    for ref in refs:
+        if ref in seen:
+            continue
+        seen.add(ref)
+        dedup.append(ref)
+    return dedup
+
+
+def _collect_errors(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    raw_errors = payload.get("errors")
+    if isinstance(raw_errors, list):
+        for row in raw_errors:
+            if isinstance(row, str) and row.strip():
+                errors.append(row.strip())
+
+    raw_error = payload.get("error")
+    if isinstance(raw_error, str) and raw_error.strip():
+        errors.append(raw_error.strip())
+
+    replay = payload.get("replay")
+    if isinstance(replay, dict):
+        violations = replay.get("violations")
+        if isinstance(violations, list):
+            for row in violations:
+                if isinstance(row, str) and row.strip():
+                    errors.append(row.strip())
+
+    dedup: list[str] = []
+    seen: set[str] = set()
+    for error in errors:
+        if error in seen:
+            continue
+        seen.add(error)
+        dedup.append(error)
+    return dedup
+
+
+def _strict_user_envelope(command_name: str, payload: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    if command_name not in _USER_FACING_COMMANDS:
+        return payload
+
+    raw_next = payload.get("next")
+    if isinstance(raw_next, dict):
+        next_block = _normalize_next(raw_next)
+    else:
+        next_block = _fallback_next(command_name, args)
+
+    data = {key: value for key, value in payload.items() if key not in {"summary", "status", "next", "refs", "errors", "data"}}
+    status = str(payload.get("status", "ok"))
+    errors = _collect_errors(payload)
+
+    return {
+        "summary": _summary_block(command_name, payload, args),
+        "status": status,
+        "next": next_block,
+        "refs": _collect_refs(payload),
+        "errors": errors,
+        "data": data,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -273,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
         next_block = _error_next(command_name, args)
         if next_block:
             payload["next"] = next_block
-        _print(payload)
+        _print(_strict_user_envelope(command_name, payload, args))
         return exit_code
 
     status = payload.get("status")
@@ -305,15 +468,17 @@ def main(argv: list[str] | None = None) -> int:
         print(str(payload["script"]), end="")
         return exit_code
 
+    render_payload = _strict_user_envelope(command_name, payload, args)
+
     if sys.stdout.isatty():
         if command_name == "status" and not bool(getattr(args, "json", False)):
-            _print_status_text(payload)
+            _print_status_text(render_payload)
             return exit_code
-        if command_name == "module status":
-            _print_module_text(payload)
+        if command_name == "module status" and not bool(getattr(args, "json", False)):
+            _print_module_text(render_payload)
             return exit_code
 
-    _print(payload)
+    _print(render_payload)
     return exit_code
 
 

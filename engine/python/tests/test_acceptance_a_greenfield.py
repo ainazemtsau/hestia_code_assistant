@@ -41,6 +41,13 @@ def module_state_root(root: Path, module_path: str) -> Path:
     return root / ".csk" / "modules" / Path(module_path)
 
 
+def user_data(payload: dict) -> dict:
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return data
+    return payload
+
+
 def task_root(root: Path, task_id: str, module_path: str = ".") -> Path:
     return module_state_root(root, module_path) / "tasks" / task_id
 
@@ -220,8 +227,8 @@ def run_acceptance_a_greenfield_scenario(root: Path) -> dict:
         "task_id": task_id,
         "task_root": task_root(root, task_id),
         "task_run_root": task_run_root(root, task_id),
-        "retro": retro,
-        "replay": replay,
+        "retro": user_data(retro),
+        "replay": user_data(replay),
         "event_types": event_types_for_task(root, task_id),
     }
 
@@ -306,7 +313,7 @@ class AcceptanceAGreenfieldTests(unittest.TestCase):
 
             replay = run_cli(root, "replay", "--check", expect_code=30)
             self.assertEqual(replay["status"], "replay_failed")
-            violations = replay["replay"]["violations"]
+            violations = user_data(replay)["replay"]["violations"]
             self.assertGreater(len(violations), 0)
             self.assertTrue(any(str(manifest) in row for row in violations))
 

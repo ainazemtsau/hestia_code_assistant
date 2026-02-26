@@ -83,3 +83,39 @@ Append-only журнал прогресса remediation-фаз `phase-00..phase-
   - Blocking risks отсутствуют.
 - next_recovery_or_next_phase:
   - Запустить `phase-02-status-next-model` и перевести phase-02 в `in_progress`.
+
+## Entry 003 (phase-02 done)
+- timestamp_utc: 2026-02-26T11:11:39Z
+- phase_id: phase-02
+- status: done
+- implemented_changes:
+  - Реализована единая status read-модель с top-level `project_phase`, active контекстом и counters (`tasks_by_status`, `proof_packs_total`, `retro_total`).
+  - NEXT routing унифицирован на user-facing команды и deterministic active-module selection.
+  - Внедрён strict user envelope (`summary/status/next/refs/errors/data`) для `status/new/run/approve/module status/retro run/replay`.
+  - Обновлён `csk run`: при `PLANNING` выполняет critic/freeze progression до шага human approve.
+  - Обновлены unit/acceptance/harness тесты под новый envelope и routing.
+  - Обновлены remediation evidence docs phase-02.
+- artifacts_paths:
+  - engine/python/csk_next/runtime/status.py
+  - engine/python/csk_next/cli/main.py
+  - engine/python/csk_next/cli/handlers.py
+  - engine/python/csk_next/cli/parser.py
+  - engine/python/tests/test_unit.py
+  - engine/python/tests/test_acceptance.py
+  - engine/python/tests/test_acceptance_a_greenfield.py
+  - docs/CONTRACT.md
+  - docs/remediation_2026-02-26/phase-02-status-next-model/{ROUTING_DECISION_TABLE.md,SAMPLE_OUTPUTS.md,PROGRESS.md,EVIDENCE_INDEX.md}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Запустить `phase-03-module-registry-init` отдельной сессией.

@@ -159,11 +159,37 @@ def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
     scripted = any([args.request, args.modules, args.shape, args.plan_option, args.yes, args.non_interactive])
     if not scripted:
         status = project_root_status(layout)
-        for module in status.get("modules", []):
-            if module.get("phase") == "EXECUTING" and module.get("active_task_id"):
-                task_id = str(module["active_task_id"])
-                module_id = str(module["module_id"])
-                slice_id = str(module.get("active_slice_id") or "S-0001")
+        active_module_id = status.get("summary", {}).get("active_module_id")
+        active = None
+        if isinstance(active_module_id, str):
+            active = next((row for row in status.get("modules", []) if row.get("module_id") == active_module_id), None)
+
+        if isinstance(active, dict) and active.get("active_task_id"):
+            task_id = str(active["active_task_id"])
+            module_id = str(active["module_id"])
+            phase = str(active.get("phase", "IDLE"))
+            task_status = str(active.get("task_status") or "")
+
+            if phase == "PLANNING":
+                module = _resolve_module(layout, module_id)
+                if task_status == "draft":
+                    return task_record_critic(
+                        layout=layout,
+                        module_path=module["path"],
+                        task_id=task_id,
+                        critic="csk-critic",
+                        p0=0,
+                        p1=0,
+                        p2=0,
+                        p3=0,
+                        notes="",
+                    )
+                if task_status == "critic_passed":
+                    return task_freeze(layout=layout, module_path=module["path"], task_id=task_id)
+                return status
+
+            if phase == "EXECUTING":
+                slice_id = str(active.get("active_slice_id") or "S-0001")
                 task_state = _task_state(layout, module_id, task_id)
                 slices = task_state.get("slices", {})
                 if isinstance(slices, dict) and slices and all(
@@ -191,6 +217,9 @@ def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
                     p3=0,
                     review_notes="",
                 )
+
+            if phase in {"PLAN_FROZEN", "READY_VALIDATED", "RETRO_REQUIRED", "BLOCKED"}:
+                return status
         if sys.stdin.isatty():
             return run_wizard(
                 layout=layout,

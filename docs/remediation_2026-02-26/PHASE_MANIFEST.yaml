@@ -23,7 +23,7 @@ phases:
   - phase_id: phase-02
     title: STATUS/NEXT единая модель состояния
     dir: phase-02-status-next-model
-    status: planned
+    status: done
     depends_on: [phase-01]
   - phase_id: phase-03
     title: Module registry и init semantics

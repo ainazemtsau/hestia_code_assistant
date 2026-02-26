@@ -97,9 +97,11 @@ Schema ключи соответствуют runtime в `engine/python/csk_next/
 - `next`: рекомендуемое действие (`recommended`) и допустимые альтернативы (`alternatives`).
 - `refs`: ссылки/пути на артефакты и доказательства результата.
 - `errors`: нормализованные ошибки/нарушения для неуспешных результатов.
+- `data`: command-specific payload (результат конкретной команды).
 
 Transition note:
-- В текущей реализации часть команд может дополнительно использовать legacy-совместимые поля (`error`, domain-specific payload). Контракт выше фиксирует target shape и используется как canonical reference для следующих фаз.
+- Начиная с remediation phase-02 strict envelope обязателен для user-facing команд: `status`, `new`, `run`, `approve`, `module status`/`module <id>`, `retro run`, `replay`.
+- Backend/internal группы (`task/slice/gate/event/...`) сохраняют machine-centric payload и не обязаны использовать strict user envelope.
 
 ## Worktree and State-Root Policy
 

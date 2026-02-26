@@ -60,6 +60,13 @@ def module_state_root(root: Path, module_path: str) -> Path:
     return root / ".csk" / "modules" / Path(module_path)
 
 
+def user_data(payload: dict) -> dict:
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return data
+    return payload
+
+
 def setup_module(root: Path, module_id: str, module_path: str) -> None:
     add_payload = run_cli(root, "module", "add", "--path", module_path, "--module-id", module_id)
     if add_payload["status"] != "ok":
@@ -192,9 +199,10 @@ class AcceptanceTests(unittest.TestCase):
                 "--non-interactive",
             )
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["wizard"]["session_status"], "completed")
-            self.assertEqual(payload["wizard"]["result"]["kind"], "single_module_task")
-            artifacts = payload["wizard"]["result"]["artifacts"]
+            wizard = user_data(payload)["wizard"]
+            self.assertEqual(wizard["session_status"], "completed")
+            self.assertEqual(wizard["result"]["kind"], "single_module_task")
+            artifacts = wizard["result"]["artifacts"]
             self.assertTrue(Path(artifacts["task_path"]).exists())
             self.assertTrue((module_state_root(root, "modules/app") / "module" / "kernel.json").exists())
 
@@ -218,8 +226,9 @@ class AcceptanceTests(unittest.TestCase):
                 "--non-interactive",
             )
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["wizard"]["session_status"], "completed")
-            result = payload["wizard"]["result"]
+            wizard = user_data(payload)["wizard"]
+            self.assertEqual(wizard["session_status"], "completed")
+            result = wizard["result"]
             self.assertEqual(result["kind"], "multi_module_mission")
             self.assertEqual(len(result["artifacts"]["tasks_created"]), 2)
             self.assertTrue((module_state_root(root, "modules/owner") / "module" / "kernel.json").exists())
@@ -380,7 +389,7 @@ class AcceptanceTests(unittest.TestCase):
                 expect_code=2,
             )
             self.assertEqual(retro["status"], "error")
-            self.assertIn("ready_approved or blocked", retro["error"])
+            self.assertTrue(any("ready_approved or blocked" in row for row in retro.get("errors", [])))
             self.assertFalse((module_state_root(root, "modules/app") / "tasks" / task_id / "retro.md").exists())
 
     def test_acceptance_d_failures_and_doctor(self) -> None:
@@ -455,8 +464,9 @@ class AcceptanceTests(unittest.TestCase):
 
             created = run_cli(root, "new", "Implement API hardening", "--modules", "app")
             self.assertEqual(created["status"], "ok")
-            self.assertEqual(created["kind"], "single_module_task")
-            task_id = created["task_id"]
+            created_data = user_data(created)
+            self.assertEqual(created_data["kind"], "single_module_task")
+            task_id = created_data["task_id"]
 
             self.assertEqual(
                 run_cli(root, "plan", "critic", "--module-id", "app", "--task-id", task_id)["status"],
@@ -478,7 +488,7 @@ class AcceptanceTests(unittest.TestCase):
                 "tester",
             )
             self.assertEqual(plan_approval["status"], "ok")
-            self.assertEqual(plan_approval["kind"], "plan")
+            self.assertEqual(user_data(plan_approval)["kind"], "plan")
 
             run_first = run_cli(root, "run")
             self.assertEqual(run_first["status"], "done")
@@ -497,7 +507,7 @@ class AcceptanceTests(unittest.TestCase):
                 "tester",
             )
             self.assertEqual(ready_approval["status"], "ok")
-            self.assertEqual(ready_approval["kind"], "ready")
+            self.assertEqual(user_data(ready_approval)["kind"], "ready")
 
             retro = run_cli(
                 root,
@@ -508,7 +518,7 @@ class AcceptanceTests(unittest.TestCase):
                 task_id,
             )
             self.assertEqual(retro["status"], "ok")
-            self.assertTrue(Path(retro["patch_file"]).exists())
+            self.assertTrue(Path(user_data(retro)["patch_file"]).exists())
 
             context = run_cli(root, "context", "build", "--module-id", "app", "--task-id", task_id)
             self.assertEqual(context["status"], "ok")
@@ -520,7 +530,7 @@ class AcceptanceTests(unittest.TestCase):
 
             replay = run_cli(root, "replay", "--check")
             self.assertEqual(replay["status"], "ok")
-            self.assertEqual(replay["replay"]["status"], "ok")
+            self.assertEqual(user_data(replay)["replay"]["status"], "ok")
 
     def test_acceptance_e_update_and_overlay_preserved(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -555,7 +565,7 @@ class AcceptanceTests(unittest.TestCase):
             skill.write_text(skill.read_text(encoding="utf-8") + "\nDRIFT\n", encoding="utf-8")
 
             status = run_cli(root, "status", "--json")
-            self.assertEqual(status["skills"]["status"], "failed")
+            self.assertEqual(user_data(status)["skills"]["status"], "failed")
             self.assertEqual(status["next"]["recommended"], "csk skills generate")
 
             failed = run_cli(root, "validate", "--all", "--strict", "--skills", expect_code=10)

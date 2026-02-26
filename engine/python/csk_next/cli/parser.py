@@ -40,12 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
     new_p.add_argument("text", help="Mission/task request")
     new_p.add_argument("--modules", help="Comma-separated module ids (example: app,api)")
     new_p.add_argument("--profile")
+    new_p.add_argument("--json", action="store_true")
     new_p.set_defaults(handler=handlers.cmd_new)
 
     approve_p = sub.add_parser("approve", help="Context approval for plan or READY")
     approve_p.add_argument("--module-id", required=True)
     approve_p.add_argument("--task-id", required=True)
     approve_p.add_argument("--approved-by", required=True)
+    approve_p.add_argument("--json", action="store_true")
     approve_p.set_defaults(handler=handlers.cmd_approve)
 
     run_p = sub.add_parser("run", help="Run the interactive wizard-first workflow")
@@ -55,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--plan-option", choices=["A", "B", "C"], help="Optional planning option")
     run_p.add_argument("--yes", action="store_true", help="Auto-confirm materialization")
     run_p.add_argument("--non-interactive", action="store_true", help="Do not prompt for missing wizard steps")
+    run_p.add_argument("--json", action="store_true")
     run_p.set_defaults(handler=handlers.cmd_run)
 
     wizard_p = sub.add_parser("wizard", help="Wizard backend API")
@@ -112,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     module_status_p = module_sub.add_parser("status")
     module_status_p.add_argument("--module-id")
+    module_status_p.add_argument("--json", action="store_true")
     module_status_p.set_defaults(handler=handlers.cmd_module_status)
 
     worktree_p = sub.add_parser("worktree", help="Worktree utilities")
@@ -316,6 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     retro_run_p.add_argument("--module-id", required=True)
     retro_run_p.add_argument("--task-id", required=True)
     retro_run_p.add_argument("--feedback", default="")
+    retro_run_p.add_argument("--json", action="store_true")
     retro_run_p.set_defaults(handler=handlers.cmd_retro_run)
 
     validate_p = sub.add_parser("validate")
@@ -353,6 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     replay_p = sub.add_parser("replay", help="Replay and invariant checks")
     replay_p.add_argument("--check", action="store_true")
+    replay_p.add_argument("--json", action="store_true")
     replay_p.set_defaults(handler=handlers.cmd_replay)
 
     skills_p = sub.add_parser("skills", help="Generated skills utilities")
