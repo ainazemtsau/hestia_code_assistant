@@ -595,6 +595,42 @@ class UnitTests(unittest.TestCase):
             self.assertTrue((session_root / "events.jsonl").exists())
             self.assertTrue((session_root / "result.json").exists())
 
+    def test_wizard_module_mapping_suggestions_require_explicit_confirmation(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+
+            started = run_cli(root, "wizard", "start")
+            session_id = started["wizard"]["session_id"]
+            run_cli(root, "wizard", "answer", "--session-id", session_id, "--response", "Implement change in app module")
+            view = run_cli(root, "wizard", "status", "--session-id", session_id)
+
+            self.assertEqual(view["wizard"]["step"]["step_id"], "module_mapping")
+            suggestions = view["wizard"]["step"]["suggestions"]
+            self.assertGreater(len(suggestions), 0)
+            self.assertTrue(all(bool(row["requires_explicit_confirm"]) for row in suggestions))
+            self.assertIn("module_mapping_recommended", view["wizard"]["context"])
+            self.assertNotIn("selected_modules", view["wizard"]["context"])
+
+    def test_run_non_interactive_reports_missing_scripted_answers(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(
+                root,
+                "run",
+                "--answers-json",
+                json.dumps({"answers": {"intake_request": "Incomplete answers payload"}}, ensure_ascii=False),
+                "--non-interactive",
+                expect_code=10,
+            )
+            self.assertEqual(payload["status"], "failed")
+            data = user_data(payload)
+            self.assertIn("wizard requires additional answers", data["error"])
+            self.assertIn("module_mapping", data["missing_steps"])
+
     def test_run_without_executable_slice_starts_wizard(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -33,7 +33,7 @@ phases:
   - phase_id: phase-04
     title: Wizard scripted mode и materialization
     dir: phase-04-wizard-scripted-routing
-    status: planned
+    status: done
     depends_on: [phase-03]
   - phase_id: phase-05
     title: Plan Gate hardening

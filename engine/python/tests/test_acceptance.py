@@ -159,19 +159,24 @@ class AcceptanceTests(unittest.TestCase):
             root = Path(temp_dir)
             state_root = Path(state_dir) / "state"
             self.assertEqual(run_cli(root, "bootstrap", state_root=state_root)["status"], "ok")
+            answers = json.dumps(
+                {
+                    "answers": {
+                        "intake_request": "Implement scoped change",
+                        "module_mapping": "app:modules/app",
+                        "execution_shape": "single",
+                        "planning_option": "B",
+                        "confirm_materialization": "yes",
+                    }
+                },
+                ensure_ascii=False,
+            )
 
             payload = run_cli(
                 root,
                 "run",
-                "--request",
-                "Implement scoped change",
-                "--modules",
-                "app:modules/app",
-                "--shape",
-                "single",
-                "--plan-option",
-                "B",
-                "--yes",
+                "--answers-json",
+                answers,
                 "--non-interactive",
                 state_root=state_root,
             )
@@ -183,19 +188,24 @@ class AcceptanceTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            answers = json.dumps(
+                {
+                    "answers": {
+                        "intake_request": "Implement small API change",
+                        "module_mapping": "app:modules/app",
+                        "execution_shape": "single",
+                        "planning_option": "B",
+                        "confirm_materialization": "yes",
+                    }
+                },
+                ensure_ascii=False,
+            )
 
             payload = run_cli(
                 root,
                 "run",
-                "--request",
-                "Implement small API change",
-                "--modules",
-                "app:modules/app",
-                "--shape",
-                "single",
-                "--plan-option",
-                "B",
-                "--yes",
+                "--answers-json",
+                answers,
                 "--non-interactive",
             )
             self.assertEqual(payload["status"], "ok")
@@ -210,19 +220,33 @@ class AcceptanceTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            answers_path = root / "answers-multi.json"
+            answers_path.write_text(
+                json.dumps(
+                    {
+                        "answers": {
+                            "intake_request": "Change owner API and adapt consumer",
+                            "module_mapping": [
+                                "owner:modules/owner",
+                                "consumer:modules/consumer",
+                            ],
+                            "execution_shape": "multi",
+                            "planning_option": "B",
+                            "confirm_materialization": "yes",
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
             payload = run_cli(
                 root,
                 "run",
-                "--request",
-                "Change owner API and adapt consumer",
-                "--modules",
-                "owner:modules/owner,consumer:modules/consumer",
-                "--shape",
-                "multi",
-                "--plan-option",
-                "B",
-                "--yes",
+                "--answers",
+                "@answers-multi.json",
                 "--non-interactive",
             )
             self.assertEqual(payload["status"], "ok")
@@ -230,9 +254,38 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(wizard["session_status"], "completed")
             result = wizard["result"]
             self.assertEqual(result["kind"], "multi_module_mission")
+            self.assertEqual(result["artifacts"]["milestone_id"], "MS-0001")
+            self.assertTrue(Path(result["artifacts"]["routing_path"]).exists())
+            self.assertTrue(Path(result["artifacts"]["milestones_path"]).exists())
             self.assertEqual(len(result["artifacts"]["tasks_created"]), 2)
             self.assertTrue((module_state_root(root, "modules/owner") / "module" / "kernel.json").exists())
             self.assertTrue((module_state_root(root, "modules/consumer") / "module" / "kernel.json").exists())
+
+    def test_run_answers_json_invalid_schema_fails(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            bad_answers = json.dumps({"answers": {"unknown_step": "value"}}, ensure_ascii=False)
+            payload = run_cli(root, "run", "--answers-json", bad_answers, "--non-interactive", expect_code=2)
+            self.assertEqual(payload["status"], "error")
+            self.assertTrue(any("unknown answer keys" in row for row in payload.get("errors", [])))
+
+    def test_run_answers_conflict_with_legacy_flags_fails(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            answers = json.dumps({"intake_request": "Task"}, ensure_ascii=False)
+            payload = run_cli(
+                root,
+                "run",
+                "--answers-json",
+                answers,
+                "--request",
+                "conflicting legacy",
+                expect_code=2,
+            )
+            self.assertEqual(payload["status"], "error")
+            self.assertTrue(any("Do not mix --answers/--answers-json" in row for row in payload.get("errors", [])))
 
     def test_acceptance_a_greenfield(self) -> None:
         with TemporaryDirectory() as temp_dir:

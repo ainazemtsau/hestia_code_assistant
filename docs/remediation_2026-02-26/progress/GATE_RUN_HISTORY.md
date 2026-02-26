@@ -55,3 +55,12 @@ Append-only журнал обязательного gate-pack после зав�
 - doctor_git_boundary_status: ok
 - overall: pass
 - notes: Phase-03 module registry/init semantics complete; validate path migrated legacy registry to `registered` field, module status semantics and idempotent init verified.
+
+## Entry 005
+- timestamp_utc: 2026-02-26T13:32:01Z
+- phase_id: phase-04
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Phase-04 wizard scripted routing complete (`--answers @file`, `--answers-json`, step-id validation, module mapping suggestions without auto-accept, materialization result contract).

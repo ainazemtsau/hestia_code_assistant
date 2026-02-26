@@ -150,3 +150,34 @@ Append-only журнал прогресса remediation-фаз `phase-00..phase-
   - Первый strict validate выявил legacy registry drift (нет `registered`); устранено через миграцию в validate path.
 - next_recovery_or_next_phase:
   - Стартовать `phase-04-wizard-scripted-routing` отдельной сессией.
+
+## Entry 005 (phase-04 done)
+- timestamp_utc: 2026-02-26T13:32:01Z
+- phase_id: phase-04
+- status: done
+- implemented_changes:
+  - Реализован scripted wizard intake для `csk run` через `--answers @file` и `--answers-json` с schema validation/normalization.
+  - Выполнен рефактор wizard runner на step-id routing с детерминированным non-interactive fail path (`missing_steps`).
+  - Добавлены `module_mapping` suggestions (hint-only, без автопринятия) и расширен machine-readable result contract materialization.
+  - Обновлены unit/acceptance тесты, включая invalid schema и conflicts для run flags.
+  - Обновлены phase-04 evidence/transcript и canonical command surface в `docs/CONTRACT.md`.
+- artifacts_paths:
+  - engine/python/csk_next/wizard/{scripted_answers.py,runner.py,fsm.py}
+  - engine/python/csk_next/cli/{parser.py,handlers.py}
+  - engine/python/tests/{test_acceptance.py,test_unit.py}
+  - docs/CONTRACT.md
+  - docs/remediation_2026-02-26/phase-04-wizard-scripted-routing/{SCRIPTED_TRANSCRIPT.md,EVIDENCE_INDEX.md,PROGRESS.md,CHECKLIST.md}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Стартовать `phase-05-plan-gate-hardening` отдельной сессией.

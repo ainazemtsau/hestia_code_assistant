@@ -55,6 +55,7 @@ from csk_next.runtime.worktrees import ensure_worktrees_for_mission
 from csk_next.skills.generator import generate_skills, validate_generated_skills
 from csk_next.update.engine import update_engine
 from csk_next.wizard.runner import run_wizard, wizard_answer, wizard_start, wizard_status
+from csk_next.wizard.scripted_answers import resolve_run_answers
 
 
 def _layout(args: argparse.Namespace) -> Layout:
@@ -156,7 +157,17 @@ def cmd_approve(args: argparse.Namespace) -> dict[str, Any]:
 
 def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
-    scripted = any([args.request, args.modules, args.shape, args.plan_option, args.yes, args.non_interactive])
+    scripted_answers = resolve_run_answers(
+        layout=layout,
+        answers_ref=getattr(args, "answers", None),
+        answers_json=getattr(args, "answers_json", None),
+        request=args.request,
+        modules=args.modules,
+        shape=args.shape,
+        plan_option=args.plan_option,
+        auto_confirm=args.yes,
+    )
+    scripted = scripted_answers is not None
     if not scripted:
         status = project_root_status(layout)
         active_module_id = status.get("summary", {}).get("active_module_id")
@@ -223,22 +234,20 @@ def cmd_run(args: argparse.Namespace) -> dict[str, Any]:
         if sys.stdin.isatty():
             return run_wizard(
                 layout=layout,
-                request=args.request,
-                modules=args.modules,
-                shape=args.shape,
-                plan_option=args.plan_option,
-                auto_confirm=args.yes,
+                scripted_answers=None,
                 non_interactive=args.non_interactive,
+            )
+        if args.non_interactive:
+            return run_wizard(
+                layout=layout,
+                scripted_answers=None,
+                non_interactive=True,
             )
         return wizard_start(layout)
 
     return run_wizard(
         layout=layout,
-        request=args.request,
-        modules=args.modules,
-        shape=args.shape,
-        plan_option=args.plan_option,
-        auto_confirm=args.yes,
+        scripted_answers=scripted_answers,
         non_interactive=args.non_interactive,
     )
 

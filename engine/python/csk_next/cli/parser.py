@@ -51,6 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
     approve_p.set_defaults(handler=handlers.cmd_approve)
 
     run_p = sub.add_parser("run", help="Run the interactive wizard-first workflow")
+    run_p.add_argument(
+        "--answers",
+        help="Scripted wizard answers file as @path/to/answers.json",
+    )
+    run_p.add_argument(
+        "--answers-json",
+        help="Scripted wizard answers JSON object",
+    )
     run_p.add_argument("--request", help="Optional request text for scripted wizard run")
     run_p.add_argument("--modules", help="Optional module mapping: module_id:path,module2:path2")
     run_p.add_argument("--shape", choices=["single", "multi", "auto"], help="Optional execution shape")

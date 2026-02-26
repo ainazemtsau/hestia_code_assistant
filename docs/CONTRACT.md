@@ -57,6 +57,8 @@ Hard constraints:
 - `csk` / `csk status --json`
 - `csk new`
 - `csk run`
+  - scripted mode: `csk run --answers @path/to/answers.json`
+  - scripted mode: `csk run --answers-json '{"answers": {...}}'`
 - `csk approve`
 - `csk module <id>` / `csk module status --module-id <id>`
 - `csk retro`

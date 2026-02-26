@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
 from typing import Any
 
 from csk_next.domain.state import ensure_registry, find_module
@@ -19,6 +21,34 @@ from csk_next.wizard.store import (
     save_session,
     start_session,
 )
+
+
+def _module_mapping_suggestions(layout: Layout, classification: str) -> list[dict[str, Any]]:
+    registry = ensure_registry(layout.registry)
+    modules = sorted(registry["modules"], key=lambda row: str(row.get("module_id", "")))
+    if not modules:
+        return []
+
+    if classification == "multi_module_mission":
+        selected = modules
+    else:
+        preferred = [row for row in modules if str(row.get("module_id", "")) == "root"]
+        selected = preferred or [modules[0]]
+
+    suggestions: list[dict[str, Any]] = []
+    for module in selected:
+        module_id = str(module["module_id"])
+        module_path = str(module["path"])
+        suggestions.append(
+            {
+                "module_id": module_id,
+                "path": module_path,
+                "token": module_id,
+                "reason": "Suggested from registered modules based on intake classification.",
+                "requires_explicit_confirm": True,
+            }
+        )
+    return suggestions
 
 
 def _parse_module_mapping(raw: str) -> list[tuple[str, str | None]]:
@@ -115,11 +145,16 @@ def _materialize(layout: Layout, session_id: str, context: dict[str, Any]) -> di
         payload = {
             "kind": "single_module_task",
             "session_id": session_id,
+            "request": summary,
+            "shape": shape,
             "planning_option": option,
             "artifacts": {
                 "task_id": result["task_id"],
                 "task_path": result["task_path"],
                 "module_id": module_id,
+                "plan_path": str(Path(result["task_path"]) / "plan.md"),
+                "slices_path": str(Path(result["task_path"]) / "slices.json"),
+                "decisions_path": str(Path(result["task_path"]) / "decisions.jsonl"),
             },
         }
         save_result(layout, session_id, payload)
@@ -137,10 +172,16 @@ def _materialize(layout: Layout, session_id: str, context: dict[str, Any]) -> di
     payload = {
         "kind": "multi_module_mission",
         "session_id": session_id,
+        "request": summary,
+        "shape": shape,
         "planning_option": option,
         "artifacts": {
             "mission_id": mission["mission_id"],
             "mission_path": mission["path"],
+            "milestone_id": "MS-0001",
+            "routing_path": str(Path(mission["path"]) / "routing.json"),
+            "milestones_path": str(Path(mission["path"]) / "milestones.json"),
+            "worktrees_path": str(Path(mission["path"]) / "worktrees.json"),
             "tasks_created": mission["tasks_created"],
             "modules": selected_modules,
         },
@@ -154,17 +195,36 @@ def wizard_start(layout: Layout) -> dict[str, Any]:
     return wizard_status(layout, session.session_id)
 
 
+def _step_payload(step: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(step)
+    if str(payload.get("step_id")) != "module_mapping":
+        return payload
+
+    suggestions = context.get("module_mapping_suggestions")
+    if isinstance(suggestions, list):
+        payload["suggestions"] = suggestions
+    recommended = context.get("module_mapping_recommended")
+    if isinstance(recommended, str) and recommended.strip():
+        payload["recommended"] = recommended.strip()
+    payload["unchanged"] = [
+        "Suggestions are hints only",
+        "Only explicit module mapping input is materialized",
+    ]
+    return payload
+
+
 def wizard_status(layout: Layout, session_id: str) -> dict[str, Any]:
     session = load_session(layout, session_id)
     result = load_result(layout, session_id)
     current = session.current_step
+    step = _step_payload(current.to_dict(), session.context) if current is not None else None
     return {
         "status": "ok",
         "wizard": {
             "session_id": session.session_id,
             "session_status": session.status,
             "current_step_index": session.current_step_index,
-            "step": current.to_dict() if current is not None else None,
+            "step": step,
             "context": session.context,
             "result": result,
         },
@@ -199,8 +259,21 @@ def wizard_answer(layout: Layout, session_id: str, response: str) -> dict[str, A
         registry = ensure_registry(layout.registry)
         module_ids = [item["module_id"] for item in registry["modules"]]
         classification = classify_request(request_text, module_ids)["classification"]
+        suggestions = _module_mapping_suggestions(layout, classification)
         session.context["request"] = request_text
         session.context["classification"] = classification
+        session.context["module_mapping_suggestions"] = suggestions
+        if suggestions:
+            session.context["module_mapping_recommended"] = ",".join(str(item["token"]) for item in suggestions)
+        append_event(
+            layout,
+            session_id,
+            {
+                "event": "module_mapping_suggested",
+                "classification": classification,
+                "suggestions": suggestions,
+            },
+        )
 
     elif step.step_id == "module_mapping":
         mappings = _parse_module_mapping(response)
@@ -244,42 +317,12 @@ def wizard_answer(layout: Layout, session_id: str, response: str) -> dict[str, A
 def run_wizard(
     *,
     layout: Layout,
-    request: str | None,
-    modules: str | None,
-    shape: str | None,
-    plan_option: str | None,
-    auto_confirm: bool,
+    scripted_answers: dict[str, str] | None,
     non_interactive: bool,
 ) -> dict[str, Any]:
     started = wizard_start(layout)
     wizard = started["wizard"]
     session_id = wizard["session_id"]
-
-    scripted_answers: list[str] = []
-    if request is not None:
-        scripted_answers.append(request)
-    if modules is not None:
-        scripted_answers.append(modules)
-    if shape is not None:
-        scripted_answers.append(shape)
-    if plan_option is not None:
-        scripted_answers.append(plan_option)
-    if auto_confirm:
-        scripted_answers.append("yes")
-
-    for answer in scripted_answers:
-        started = wizard_answer(layout, session_id, answer)
-
-    status = started["wizard"]["session_status"]
-    if status in {"completed", "cancelled"}:
-        return started
-
-    if non_interactive:
-        return {
-            "status": "failed",
-            "wizard": started["wizard"],
-            "error": "wizard requires additional answers",
-        }
 
     while True:
         view = wizard_status(layout, session_id)
@@ -290,6 +333,20 @@ def run_wizard(
         step = wizard_data["step"]
         if step is None:
             return view
+        step_id = str(step["step_id"])
+        if isinstance(scripted_answers, dict) and step_id in scripted_answers:
+            wizard_answer(layout, session_id, str(scripted_answers[step_id]))
+            continue
+
+        if non_interactive or not sys.stdin.isatty():
+            session = load_session(layout, session_id)
+            missing_steps = [row.step_id for row in session.steps[session.current_step_index :]]
+            return {
+                "status": "failed",
+                "wizard": wizard_data,
+                "error": "wizard requires additional answers",
+                "missing_steps": missing_steps,
+            }
 
         print(f"\n[{step['title']}] {step['prompt']}")
         if step["options"]:
@@ -301,6 +358,14 @@ def run_wizard(
             print("unchanged:")
             for row in step["unchanged"]:
                 print(f"  - {row}")
+        if step.get("suggestions"):
+            print("suggestions:")
+            for row in step["suggestions"]:
+                token = row.get("token")
+                module_id = row.get("module_id")
+                module_path = row.get("path")
+                reason = row.get("reason")
+                print(f"  - {token} (module={module_id}, path={module_path}) :: {reason}")
         print(f"input hint: {step['input_hint']}")
 
         answer = input("> ").strip()

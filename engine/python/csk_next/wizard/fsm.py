@@ -23,7 +23,10 @@ def wizard_steps() -> list[WizardStep]:
                 "Existing modules can be passed as `module_id` only."
             ),
             input_hint="Example: app:modules/app,api:services/api",
-            unchanged=["No module autodetect", "Only explicit module choices are used"],
+            unchanged=[
+                "Suggestions may be provided from intake + registry",
+                "Only explicit module choices are used",
+            ],
         ),
         WizardStep(
             step_id="execution_shape",
