@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -37,6 +38,22 @@ def run_cli(
     if expect_code is not None and proc.returncode != expect_code:
         raise AssertionError(proc.stdout + proc.stderr)
     return json.loads(proc.stdout)
+
+
+def run_phase01_acceptance_a_harness(root: Path) -> dict:
+    module_path = Path(__file__).with_name("test_acceptance_a_greenfield.py")
+    spec = importlib.util.spec_from_file_location("phase01_acceptance_a_harness", module_path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"Unable to load strict harness from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    scenario = getattr(module, "run_acceptance_a_greenfield_scenario", None)
+    if scenario is None:
+        raise AssertionError("run_acceptance_a_greenfield_scenario not found")
+    result = scenario(root)
+    if not isinstance(result, dict):
+        raise AssertionError("Strict harness returned non-dict result")
+    return result
 
 
 def module_state_root(root: Path, module_path: str) -> Path:
@@ -211,19 +228,8 @@ class AcceptanceTests(unittest.TestCase):
     def test_acceptance_a_greenfield(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-
-            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
-            setup_module(root, "app", "modules/app")
-
-            task = run_cli(root, "task", "new", "--module-id", "app")
-            task_id = task["task_id"]
-
-            approve_plan(root, "app", task_id)
-            run_slice_to_done(root, "app", task_id)
-            ready_and_retro(root, "app", task_id)
-
-            strict = run_cli(root, "validate", "--all", "--strict")
-            self.assertEqual(strict["status"], "ok")
+            result = run_phase01_acceptance_a_harness(root)
+            self.assertEqual(result["status"], "ok")
 
     def test_acceptance_b_brownfield_multi_module(self) -> None:
         with TemporaryDirectory() as temp_dir:

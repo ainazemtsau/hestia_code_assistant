@@ -50,3 +50,36 @@ Append-only журнал прогресса remediation-фаз `phase-00..phase-
   - Blocking risks отсутствуют.
 - next_recovery_or_next_phase:
   - Стартовать phase-01 отдельной сессией через phase packet `phase-01-acceptance-a/SESSION_PROMPT.md`.
+
+## Entry 002 (phase-01 done)
+- timestamp_utc: 2026-02-26T09:05:31Z
+- phase_id: phase-01
+- status: done
+- implemented_changes:
+  - Реализован deterministic acceptance A harness с полным lifecycle `bootstrap -> retro -> replay`.
+  - Удалён legacy plan-event naming; plan gate теперь пишет canonical `task.*` события.
+  - Добавлен параметр `--slice-count` для `task new` как штатный способ формировать multi-slice fixture.
+  - Добавлены acceptance docs: transcript и expected artifact matrix.
+- artifacts_paths:
+  - engine/python/csk_next/runtime/tasks_engine.py
+  - engine/python/csk_next/cli/parser.py
+  - engine/python/csk_next/cli/handlers.py
+  - engine/python/tests/test_acceptance_a_greenfield.py
+  - engine/python/tests/test_acceptance.py
+  - docs/acceptance/A_GREENFIELD_TRANSCRIPT.md
+  - docs/acceptance/A_EXPECTED_ARTIFACTS.md
+  - docs/remediation_2026-02-26/phase-01-acceptance-a/{PROGRESS.md,EVIDENCE_INDEX.md}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Запустить `phase-02-status-next-model` и перевести phase-02 в `in_progress`.

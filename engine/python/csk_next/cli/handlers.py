@@ -347,6 +347,7 @@ def cmd_task_new(args: argparse.Namespace) -> dict[str, Any]:
         mission_id=args.mission_id,
         profile=args.profile,
         max_attempts=args.max_attempts,
+        slice_count=args.slice_count,
         plan_template=args.plan_template,
     )
 

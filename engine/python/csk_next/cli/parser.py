@@ -153,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     task_new_p.add_argument("--mission-id")
     task_new_p.add_argument("--profile", default="default")
     task_new_p.add_argument("--max-attempts", type=int, default=2)
+    task_new_p.add_argument("--slice-count", type=int, default=1)
     task_new_p.add_argument("--plan-template")
     task_new_p.set_defaults(handler=handlers.cmd_task_new)
 

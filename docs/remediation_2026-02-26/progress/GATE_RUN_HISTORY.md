@@ -28,3 +28,12 @@ Append-only журнал обязательного gate-pack после зав�
 - doctor_git_boundary_status: ok
 - overall: pass
 - notes: Phase-00 freeze-spec complete; document contract + ADR artifacts added and verified.
+
+## Entry 002
+- timestamp_utc: 2026-02-26T09:05:31Z
+- phase_id: phase-01
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Phase-01 acceptance-a completed with strict deterministic harness, canonical task.* plan events, and acceptance docs artifacts.

@@ -47,8 +47,12 @@ def task_new(
     mission_id: str | None,
     profile: str,
     max_attempts: int,
+    slice_count: int = 1,
     plan_template: str | None = None,
 ) -> dict[str, Any]:
+    if slice_count <= 0:
+        raise ValueError("slice_count must be > 0")
+
     tasks_dir = layout.module_tasks(module_path)
     ensure_dir(tasks_dir)
     task_id = next_task_id(tasks_dir)
@@ -72,7 +76,7 @@ def task_new(
         )
     write_text(plan_path(layout, module_path, task_id), plan_body)
 
-    slices_doc = {"slices": [default_slice_entry("S-0001")]}
+    slices_doc = {"slices": [default_slice_entry(f"S-{index:04d}") for index in range(1, slice_count + 1)]}
     validate_schema("slices", slices_doc)
     write_json(slices_path(layout, module_path, task_id), slices_doc)
 
@@ -150,7 +154,7 @@ def task_record_critic(
 
     append_event(
         layout=layout,
-        event_type="plan.criticized",
+        event_type="task.critic_passed" if payload["passed"] else "task.critic_failed",
         actor=critic,
         module_id=state_module_id(layout, module_path),
         task_id=task_id,
@@ -184,7 +188,7 @@ def task_freeze(*, layout: Layout, module_path: str, task_id: str) -> dict[str, 
     write_json(freeze_path(layout, module_path, task_id), payload)
     append_event(
         layout=layout,
-        event_type="plan.frozen",
+        event_type="task.frozen",
         actor="engine",
         module_id=state_module_id(layout, module_path),
         task_id=task_id,
@@ -220,7 +224,7 @@ def task_approve_plan(
     write_json(plan_approval_path(layout, module_path, task_id), approval)
     append_event(
         layout=layout,
-        event_type="plan.approved",
+        event_type="task.plan_approved",
         actor=approved_by,
         module_id=state_module_id(layout, module_path),
         task_id=task_id,
