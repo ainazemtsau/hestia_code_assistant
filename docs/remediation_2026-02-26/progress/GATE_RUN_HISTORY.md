@@ -19,3 +19,12 @@ Append-only журнал обязательного gate-pack после зав�
 - doctor_git_boundary_status: not_run
 - overall: fail
 - notes: Gate-pack не применяется к scaffolding-only этапу.
+
+## Entry 001
+- timestamp_utc: 2026-02-26T07:53:08Z
+- phase_id: phase-00
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Phase-00 freeze-spec complete; document contract + ADR artifacts added and verified.

@@ -13,7 +13,7 @@ phases:
   - phase_id: phase-00
     title: Freeze спецификаций и устранение расхождений
     dir: phase-00-freeze-spec
-    status: planned
+    status: done
     depends_on: []
   - phase_id: phase-01
     title: Golden Path Acceptance A (deterministic E2E)

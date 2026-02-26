@@ -9,7 +9,14 @@
 - ссылка на commit/PR дифф phase-00
 
 ## Added Evidence Links
-- (empty)
+- docs/CONTRACT.md (canonical contract; layout/lifecycle/commands/artifacts/json envelope/isolation)
+- docs/ADR/ADR-0001-module-state-location.md (durable state and proofs location decision)
+- docs/ADR/ADR-0002-worktree-policy.md (worktree placement and state-root derivation decision)
+- engine/python/tests/test_unit.py::UnitTests::test_phase00_contract_docs_freeze_is_consistent
+- gate run: `./csk validate --all --strict --skills` => status ok
+- gate run: `./csk replay --check` => status ok
+- gate run: `./csk doctor run --git-boundary` => status ok
+- local diff reference: `git diff` against base HEAD `d5955f0` for phase-00 artifacts
 
 ## Notes
 - Добавлять только проверяемые ссылки на артефакты/логи/транскрипты.

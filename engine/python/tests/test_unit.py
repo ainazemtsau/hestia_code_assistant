@@ -411,6 +411,37 @@ class UnitTests(unittest.TestCase):
             self.assertIn("name:", frontmatter, msg=str(path))
             self.assertIn("description:", frontmatter, msg=str(path))
 
+    def test_phase00_contract_docs_freeze_is_consistent(self) -> None:
+        contract = REPO_ROOT / "docs" / "CONTRACT.md"
+        adr_0001 = REPO_ROOT / "docs" / "ADR" / "ADR-0001-module-state-location.md"
+        adr_0002 = REPO_ROOT / "docs" / "ADR" / "ADR-0002-worktree-policy.md"
+        evidence = REPO_ROOT / "docs" / "remediation_2026-02-26" / "phase-00-freeze-spec" / "EVIDENCE_INDEX.md"
+
+        for path in [contract, adr_0001, adr_0002, evidence]:
+            self.assertTrue(path.exists(), msg=str(path))
+
+        contract_text = contract.read_text(encoding="utf-8")
+        for marker in [
+            "Scope and Isolation",
+            "Canonical Directory Layout",
+            "Canonical Task Lifecycle",
+            "JSON Envelope Contract",
+            "docs/remediation_2026-02-26/**",
+            "summary",
+            "status",
+            "next",
+            "refs",
+            "errors",
+            "ADR-0001",
+            "ADR-0002",
+        ]:
+            self.assertIn(marker, contract_text)
+
+        evidence_text = evidence.read_text(encoding="utf-8")
+        self.assertIn("docs/CONTRACT.md", evidence_text)
+        self.assertIn("docs/ADR/ADR-0001-module-state-location.md", evidence_text)
+        self.assertIn("docs/ADR/ADR-0002-worktree-policy.md", evidence_text)
+
     def test_task_transition_map_rejects_illegal_skip(self) -> None:
         with self.assertRaises(ValueError):
             ensure_task_transition("draft", "plan_approved")
