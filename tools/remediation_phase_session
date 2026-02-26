@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REM_ROOT="$REPO_ROOT/docs/remediation_2026-02-26"
+
+usage() {
+  cat <<USAGE
+Usage:
+  tools/remediation_phase_session <phase-id> [--write-prompt]
+  tools/remediation_phase_session --all --write-prompt
+
+Examples:
+  tools/remediation_phase_session phase-00
+  tools/remediation_phase_session phase-03 --write-prompt
+  tools/remediation_phase_session --all --write-prompt
+USAGE
+}
+
+require_remediation_root() {
+  if [[ ! -d "$REM_ROOT" ]]; then
+    echo "Error: remediation root not found: $REM_ROOT" >&2
+    exit 1
+  fi
+}
+
+find_phase_dir() {
+  local phase_id="$1"
+  local match
+  match="$(cd "$REM_ROOT" && ls -d "${phase_id}-"* 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$match" ]]; then
+    echo ""; return
+  fi
+  printf "%s" "$match"
+}
+
+render_prompt() {
+  local phase_id="$1"
+  local phase_rel="$2"
+  local phase_abs="$REM_ROOT/$phase_rel"
+  local now_utc
+  now_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  cat <<PROMPT
+# Codex Session Packet: $phase_id
+
+Generated: $now_utc
+Repository: $REPO_ROOT
+Phase folder: $phase_abs
+
+## Mission
+Implement only the current phase end-to-end (code + tests + docs) with strict phase scope.
+
+## Must-Read Context (in order)
+1. $REPO_ROOT/CSK_NEXT_Remediation_Plan_MVP_2026-02-26.md
+2. $REM_ROOT/README.md
+3. $REM_ROOT/PHASE_MANIFEST.yaml
+4. $phase_abs/PLAN.md
+5. $phase_abs/CHECKLIST.md
+6. $phase_abs/ACCEPTANCE.md
+7. $phase_abs/EVIDENCE_INDEX.md
+8. $phase_abs/PROGRESS.md
+9. $REM_ROOT/progress/MASTER_PROGRESS.md
+10. $REM_ROOT/progress/GATE_RUN_HISTORY.md
+11. $REPO_ROOT/AGENTS.md
+
+## Start Protocol (mandatory)
+1. Run: ./csk status --json
+2. Set current phase status to in_progress in $REM_ROOT/PHASE_MANIFEST.yaml.
+3. Restate the phase goal from PLAN.md before coding.
+4. Implement only Scope In from PLAN.md; treat Scope Out as hard boundary.
+
+## Implementation Rules
+- Do all required code changes for this phase in one session.
+- Add/adjust tests for the phase acceptance and failure paths.
+- Do not start next phase tasks.
+- If blocked by missing prerequisite, mark phase blocked and record remediation in progress logs.
+
+## Finish Protocol (mandatory)
+1. Run gate pack:
+   - ./csk validate --all --strict --skills
+   - ./csk replay --check
+   - ./csk doctor run --git-boundary
+2. Update append-only progress entries:
+   - $phase_abs/PROGRESS.md
+   - $REM_ROOT/progress/MASTER_PROGRESS.md
+   - $REM_ROOT/progress/GATE_RUN_HISTORY.md
+3. Update $REM_ROOT/PHASE_MANIFEST.yaml status:
+   - done (all acceptance + gates pass)
+   - blocked (any gate fail or unresolved blocker)
+4. Update $phase_abs/EVIDENCE_INDEX.md with concrete artifact/test/run references.
+
+## Final Response Contract For This Session
+- What was implemented in this phase.
+- Exact files changed.
+- Gate-pack results.
+- Phase status set in PHASE_MANIFEST.yaml.
+- NEXT action (single command).
+PROMPT
+}
+
+write_prompt_file() {
+  local phase_id="$1"
+  local phase_rel="$2"
+  local out="$REM_ROOT/$phase_rel/SESSION_PROMPT.md"
+  render_prompt "$phase_id" "$phase_rel" > "$out"
+  echo "Wrote $out"
+}
+
+run_single() {
+  local phase_id="$1"
+  local write_prompt="$2"
+  local phase_rel
+  phase_rel="$(find_phase_dir "$phase_id")"
+
+  if [[ -z "$phase_rel" ]]; then
+    echo "Error: phase not found for id '$phase_id' under $REM_ROOT" >&2
+    exit 1
+  fi
+
+  if [[ "$write_prompt" == "1" ]]; then
+    write_prompt_file "$phase_id" "$phase_rel"
+  fi
+
+  render_prompt "$phase_id" "$phase_rel"
+}
+
+run_all() {
+  local write_prompt="$1"
+  local d base phase_id
+
+  while IFS= read -r d; do
+    base="$(basename "$d")"
+    phase_id="$(printf "%s" "$base" | cut -d- -f1-2)"
+    if [[ "$write_prompt" == "1" ]]; then
+      write_prompt_file "$phase_id" "$base"
+    fi
+  done < <(find "$REM_ROOT" -maxdepth 1 -type d -name 'phase-*' | sort)
+}
+
+main() {
+  require_remediation_root
+
+  if [[ $# -lt 1 ]]; then
+    usage
+    exit 1
+  fi
+
+  local arg1="$1"
+  local write_prompt=0
+  shift || true
+
+  for a in "$@"; do
+    case "$a" in
+      --write-prompt)
+        write_prompt=1
+        ;;
+      *)
+        echo "Unknown option: $a" >&2
+        usage
+        exit 1
+        ;;
+    esac
+  done
+
+  case "$arg1" in
+    --all)
+      if [[ "$write_prompt" != "1" ]]; then
+        echo "Error: --all requires --write-prompt" >&2
+        exit 1
+      fi
+      run_all "$write_prompt"
+      ;;
+    phase-*)
+      run_single "$arg1" "$write_prompt"
+      ;;
+    *)
+      echo "Unknown phase id or option: $arg1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

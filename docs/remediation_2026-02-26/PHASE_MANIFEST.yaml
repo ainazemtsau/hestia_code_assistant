@@ -1,0 +1,77 @@
+version: 1
+root: docs/remediation_2026-02-26
+source_plan: CSK_NEXT_Remediation_Plan_MVP_2026-02-26.md
+execution_policy:
+  isolated_from_legacy_plan: true
+  strict_order: true
+  status_values: [planned, in_progress, blocked, done]
+  phase_close_requires:
+    - csk validate --all --strict --skills
+    - csk replay --check
+    - csk doctor run --git-boundary
+phases:
+  - phase_id: phase-00
+    title: Freeze спецификаций и устранение расхождений
+    dir: phase-00-freeze-spec
+    status: planned
+    depends_on: []
+  - phase_id: phase-01
+    title: Golden Path Acceptance A (deterministic E2E)
+    dir: phase-01-acceptance-a
+    status: planned
+    depends_on: [phase-00]
+  - phase_id: phase-02
+    title: STATUS/NEXT единая модель состояния
+    dir: phase-02-status-next-model
+    status: planned
+    depends_on: [phase-01]
+  - phase_id: phase-03
+    title: Module registry и init semantics
+    dir: phase-03-module-registry-init
+    status: planned
+    depends_on: [phase-02]
+  - phase_id: phase-04
+    title: Wizard scripted mode и materialization
+    dir: phase-04-wizard-scripted-routing
+    status: planned
+    depends_on: [phase-03]
+  - phase_id: phase-05
+    title: Plan Gate hardening
+    dir: phase-05-plan-gate-hardening
+    status: planned
+    depends_on: [phase-04]
+  - phase_id: phase-06
+    title: Slice execution loop и proof pack
+    dir: phase-06-slice-loop-proof-pack
+    status: planned
+    depends_on: [phase-05]
+  - phase_id: phase-07
+    title: READY Gate validate-handoff-approve
+    dir: phase-07-ready-gate
+    status: planned
+    depends_on: [phase-06]
+  - phase_id: phase-08
+    title: Retro Gate mandatory + patch proposals
+    dir: phase-08-retro-gate
+    status: planned
+    depends_on: [phase-07]
+  - phase_id: phase-09
+    title: Replay hardening invariants
+    dir: phase-09-replay-hardening
+    status: planned
+    depends_on: [phase-08]
+  - phase_id: phase-10
+    title: Worktree per module MVP
+    dir: phase-10-worktree-per-module-mvp
+    status: planned
+    depends_on: [phase-09]
+  - phase_id: phase-11
+    title: Skills + UX для Codex
+    dir: phase-11-skills-ux-codex
+    status: planned
+    depends_on: [phase-10]
+  - phase_id: phase-12
+    title: Update engine rollback-safe + manager report v2
+    dir: phase-12-update-engine-report-v2
+    status: planned
+    depends_on: [phase-11]
