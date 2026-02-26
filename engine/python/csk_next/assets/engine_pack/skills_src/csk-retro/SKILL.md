@@ -1,3 +1,8 @@
+---
+name: csk-retro
+description: Retro skill for collecting incidents and producing local improvement proposals.
+---
+
 # $csk-retro
 
 Retro and improvements role.

@@ -1,3 +1,8 @@
+---
+name: csk-qa
+description: Profile-based QA skill for running e2e checks and recording proof for ready gate.
+---
+
 # $csk-qa
 
 Profile-based e2e role.

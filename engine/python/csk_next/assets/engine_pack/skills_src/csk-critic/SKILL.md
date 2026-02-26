@@ -1,3 +1,8 @@
+---
+name: csk-critic
+description: Plan gate critic skill that records findings and blocks freeze on P0/P1 issues.
+---
+
 # $csk-critic
 
 Plan gate critic role.

@@ -58,10 +58,15 @@
 | R46 | User-facing CLI error payloads include actionable `next` block (`csk/new/run/approve/module/retro/replay`) | `cli/main.py` (`_error_next`) | `test_approve_error_includes_next_for_user_flow`, `test_replay_error_includes_next_for_user_flow`, `test_retro_alias_without_subcommand` |
 | R47 | Skills generation is deterministic across repeated runs | `skills/generator.py`, `cli/handlers.py::cmd_skills_generate` | `test_skills_generate_is_deterministic` |
 | R48 | Engine skill templates include explicit terminal `NEXT:` guidance | `assets/engine_pack/skills_src/*/SKILL.md` | `test_skills_templates_include_next_block` |
+| R49 | Codex-first short entrypoint `csk` uses in-repo state by default while `tools/cskh` remains backend fallback | `csk`, `tools/csk`, `tools/cskh` | `test_short_csk_entrypoint_script_is_present` |
+| R50 | Generated skills include explicit `$csk-status` discoverability surface | `assets/engine_pack/skills_src/csk-status/SKILL.md`, `skills/generator.py` | `test_generated_skills_include_csk_status` |
+| R51 | New-project onboarding defines intent + `$csk` user contract and user-facing command catalog | `docs/NEW_PROJECT_ONBOARDING.md`, `README.md`, `docs/ops_runbook.md` | acceptance by docs + flow tests (`test_acceptance_g_clean_state_gate_pack`, `test_public_cli_flow_with_aliases_and_replay`) |
+| R52 | Bootstrap-generated root `AGENTS.md` enforces codex-first router behavior and `NEXT` discipline | `runtime/bootstrap.py::_ensure_root_agents` | `test_bootstrap_writes_codex_first_root_agents_contract` |
 
 ## Coverage Status
 
 - Recovery gaps RB-001..RB-011 are implemented and covered by tests.
 - Public migration contract (`new/run/approve/module/retro/replay/completion`) is implemented with compatibility aliases retained.
 - Operational RC baseline for working and clean state roots is captured in `docs/rc_baseline_2026-02-25.md`.
+- Codex-first new-project guide and command catalog are captured in `docs/NEW_PROJECT_ONBOARDING.md`.
 - `user-check` remains profile-optional by default and becomes mandatory only when profile sets `user_check_required=true`.

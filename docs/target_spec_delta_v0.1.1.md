@@ -26,6 +26,7 @@ If sources conflict: this delta file wins for v0.1.1 behavior.
 5. Public CLI follows docpack UX; current internal command groups remain supported during migration until P18.
 6. `--json` machine output remains supported for automation and tests.
 7. User-facing CLI error payloads include actionable `next` guidance; internal API groups keep strict machine-centric payloads.
+8. Codex-first new-project mode uses short `csk` entrypoint with in-repo state default; `tools/cskh` remains backend fallback.
 
 ## Phase Policy
 Phases still execute strictly in order `P00 -> P18`, but interpreted through the accepted deltas above.

@@ -1,3 +1,8 @@
+---
+name: csk-update-wizard
+description: Workflow update skill for engine replacement, regeneration, validation, and rollback.
+---
+
 # $csk-update-wizard
 
 Workflow update role.

@@ -2,6 +2,10 @@
 
 Use CSK to develop CSK while keeping runtime artifacts out of the product repository.
 
+For codex-first onboarding of new product repos (runtime state inside repo), use:
+- `docs/NEW_PROJECT_ONBOARDING.md`
+- short entrypoint `./csk`
+
 ## Layout
 
 - Product repo: `<repo>`

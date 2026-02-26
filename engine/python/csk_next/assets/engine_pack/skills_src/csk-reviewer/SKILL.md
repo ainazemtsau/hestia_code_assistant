@@ -1,3 +1,8 @@
+---
+name: csk-reviewer
+description: Strict review skill that enforces zero P0/P1 findings before gate pass.
+---
+
 # $csk-reviewer
 
 Strict review role.

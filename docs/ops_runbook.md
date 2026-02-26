@@ -1,5 +1,17 @@
 # CSK-Next Ops Runbook
 
+## 0. Codex-First New Project Mode
+
+For new projects, preferred user-facing entrypoint is short `csk` wrapper:
+
+```bash
+./csk bootstrap
+./csk
+```
+
+`tools/cskh` remains backend fallback for compatibility.
+Detailed onboarding: `docs/NEW_PROJECT_ONBOARDING.md`.
+
 ## 1. Bootstrap
 
 ```bash

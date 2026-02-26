@@ -1,5 +1,8 @@
 # Install shell completion (MVP)
 
+Codex-first mode does not require shell completion for normal usage.
+Use completion only as optional convenience for terminal work.
+
 ## Bash
 1. Generate:
    `csk completion bash > ~/.csk_completion.bash`

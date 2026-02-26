@@ -21,9 +21,19 @@ def _iter_relative_files(path: Path) -> list[Path]:
 def _with_marker(content: str, rel: Path) -> str:
     if rel.name.upper() != "SKILL.MD":
         return content
-    if content.startswith(GENERATED_MARKER):
-        return content
     normalized = content if content.endswith("\n") else content + "\n"
+    if GENERATED_MARKER in normalized:
+        return normalized
+    if normalized.startswith("---\n"):
+        fence = "\n---\n"
+        end = normalized.find(fence, len("---\n"))
+        if end != -1:
+            frontmatter_end = end + len(fence)
+            head = normalized[:frontmatter_end]
+            tail = normalized[frontmatter_end:].lstrip("\n")
+            if tail:
+                return f"{head}\n{GENERATED_MARKER}\n\n{tail}"
+            return f"{head}\n{GENERATED_MARKER}\n"
     return f"{GENERATED_MARKER}\n\n{normalized}"
 
 

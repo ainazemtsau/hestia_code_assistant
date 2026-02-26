@@ -77,13 +77,15 @@ def _ensure_root_agents(layout: Layout) -> None:
         """# AGENTS.md
 
 1. Start every work session with `csk status --json`.
-2. Prefer user-facing commands (`csk`, `csk new`, `csk run`, `csk approve`, `csk retro`).
-3. Keep module scope strict and avoid out-of-scope edits.
-4. Treat gate failures as blockers and follow suggested remediation.
-5. Record approvals only after reviewing proofs/handoff artifacts.
-6. Run `csk doctor run --git-boundary` before push.
-7. Do not edit generated skills directly under `.agents/skills/`.
-8. Keep local customization changes under `.csk/local/`.
+2. For user intents, route through `$csk` first; if project is not bootstrapped or skills are stale, auto-run `csk bootstrap`/`csk skills generate` before asking user for input.
+3. Prefer user-facing commands (`csk`, `csk new`, `csk run`, `csk approve`, `csk module <id>`, `csk retro`).
+4. End user-facing responses with one clear `NEXT` action.
+5. Keep module scope strict and avoid out-of-scope edits.
+6. Treat gate failures as blockers and follow suggested remediation.
+7. Record approvals only after reviewing proofs/handoff artifacts.
+8. Run `csk validate --all --strict --skills`, `csk replay --check`, and `csk doctor run --git-boundary` before push.
+9. Do not edit generated skills directly under `.agents/skills/`; use `csk skills generate`.
+10. Keep local customization changes under `.csk/local/`.
 """,
     )
 

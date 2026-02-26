@@ -1,3 +1,8 @@
+---
+name: csk-coder
+description: Slice execution skill that runs one slice at a time with scope and gate enforcement.
+---
+
 # $csk-coder
 
 Slice execution role.

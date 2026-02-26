@@ -164,6 +164,17 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(detect_again["status"], "ok")
             self.assertEqual(detect_again["created_count"], 0)
 
+    def test_bootstrap_writes_codex_first_root_agents_contract(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("`csk status --json`", agents)
+            self.assertIn("`$csk`", agents)
+            self.assertIn("`NEXT`", agents)
+            self.assertIn("`csk skills generate`", agents)
+            self.assertIn("auto-run `csk bootstrap`/`csk skills generate`", agents)
+
     def test_registry_detect_fallback_root_module(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -386,6 +397,19 @@ class UnitTests(unittest.TestCase):
         for path in files:
             text = path.read_text(encoding="utf-8")
             self.assertIn("NEXT:", text, msg=str(path))
+
+    def test_skills_templates_include_yaml_frontmatter(self) -> None:
+        skills_src = REPO_ROOT / "engine" / "python" / "csk_next" / "assets" / "engine_pack" / "skills_src"
+        files = sorted(skills_src.rglob("SKILL.md"))
+        self.assertTrue(files)
+        for path in files:
+            text = path.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\n"), msg=str(path))
+            end = text.find("\n---\n", len("---\n"))
+            self.assertNotEqual(end, -1, msg=str(path))
+            frontmatter = text[: end + len("\n---\n")]
+            self.assertIn("name:", frontmatter, msg=str(path))
+            self.assertIn("description:", frontmatter, msg=str(path))
 
     def test_task_transition_map_rejects_illegal_skip(self) -> None:
         with self.assertRaises(ValueError):
@@ -823,6 +847,56 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0)
             self.assertIn("complete -F _csk_complete csk", proc.stdout)
             self.assertNotIn('"status": "ok"', proc.stdout)
+
+    def test_short_csk_entrypoint_script_is_present(self) -> None:
+        script = REPO_ROOT / "csk"
+        wrapper = REPO_ROOT / "tools" / "csk"
+        self.assertTrue(script.exists())
+        self.assertTrue(wrapper.exists())
+        entrypoint = script.read_text(encoding="utf-8")
+        self.assertIn('STATE_ROOT="${CSK_STATE_ROOT:-${REPO_ROOT}}"', entrypoint)
+        self.assertIn("python -m csk_next.cli.main", entrypoint)
+
+    def test_generated_skills_include_csk_status(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            generated = root / ".agents" / "skills" / "csk-status" / "SKILL.md"
+            self.assertTrue(generated.exists())
+            text = generated.read_text(encoding="utf-8")
+            self.assertIn("$csk-status", text)
+            self.assertIn("NEXT:", text)
+
+    def test_generated_skills_keep_frontmatter_before_generated_marker(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            generated = root / ".agents" / "skills" / "csk" / "SKILL.md"
+            text = generated.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\n"))
+            end = text.find("\n---\n", len("---\n"))
+            self.assertNotEqual(end, -1)
+            frontmatter = text[: end + len("\n---\n")]
+            self.assertNotIn("GENERATED: do not edit by hand", frontmatter)
+            tail = text[end + len("\n---\n") :].lstrip("\n")
+            self.assertTrue(tail.startswith("<!-- GENERATED: do not edit by hand -->"))
+
+    def test_generated_csk_router_has_runnable_approve_and_retro_next_commands(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            generated = root / ".agents" / "skills" / "csk" / "SKILL.md"
+            text = generated.read_text(encoding="utf-8")
+            self.assertIn(
+                "csk approve --module-id <module_id_from_status> --task-id <active_task_id_from_status> --approved-by <human>",
+                text,
+            )
+            self.assertIn(
+                "csk retro run --module-id <module_id_from_status> --task-id <active_task_id_from_status>",
+                text,
+            )
+            self.assertNotIn("-> suggest `csk approve`.", text)
+            self.assertNotIn("-> suggest `csk retro`.", text)
 
     def test_validate_skills_detects_drift(self) -> None:
         with TemporaryDirectory() as temp_dir:

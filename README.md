@@ -5,6 +5,10 @@ CSK-Next v1 reference engine with enforced phase gates, wizard-first planning, a
 ## Quickstart
 
 ```bash
+# codex-first local mode (state inside repo root)
+./csk bootstrap
+./csk
+
 # same-root mode (legacy-compatible)
 PYTHONPATH=engine/python python -m csk_next.cli.main --root . bootstrap
 PYTHONPATH=engine/python python -m csk_next.cli.main --root . run
@@ -20,6 +24,23 @@ Low-level commands remain available as backend APIs for skills and automation.
 Interactive `csk`/`csk module <id>` render `SUMMARY/STATUS/NEXT`; machine mode remains JSON (`csk status --json`).
 `csk status --json` also reports generated skills health; when skills drift is detected, `NEXT` recommends `csk skills generate`.
 User-facing error responses include actionable `next` guidance.
+`tools/cskh` remains a fallback backend entrypoint; user-facing default is `./csk` (or `csk` if added to PATH).
+
+## Codex-First UX
+
+Primary discoverability is through skills and `NEXT` recommendations, not shell memorization.
+
+Recommended skill surfaces:
+- `$csk`
+- `$csk-status`
+- `$csk-planner`
+- `$csk-critic`
+- `$csk-coder`
+- `$csk-retro`
+
+For fresh repos, `$csk` is expected to self-heal first-run setup: it runs `csk bootstrap` and `csk skills generate` when needed, then returns a single user-facing `NEXT`.
+
+Shell completion is optional convenience for terminal-first usage.
 
 ## One-Command Flow (`csk run`)
 
@@ -97,6 +118,7 @@ Blocking invariants:
 
 See `docs/ops_runbook.md`, `docs/error_catalog.md`, `docs/git_boundary.md`, and `docs/self_host_workflow.md`.
 Operational baseline snapshot: `docs/rc_baseline_2026-02-25.md`.
+New-project codex-first onboarding: `docs/NEW_PROJECT_ONBOARDING.md`.
 
 Canonical planning/spec sources:
 - `csk_next_mvp_docpack_v0.1/csk_next_mvp_docs/**`

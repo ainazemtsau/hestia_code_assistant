@@ -1,3 +1,8 @@
+---
+name: csk-module
+description: Module routing helper that initializes and manages module kernels for scoped work.
+---
+
 # $csk-module
 
 Module routing and kernel initialization helper.

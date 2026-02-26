@@ -1,3 +1,8 @@
+---
+name: csk-planner
+description: Planning wizard skill for creating module plans, slices, and decision artifacts.
+---
+
 # $csk-planner
 
 Planning wizard role.

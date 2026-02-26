@@ -56,3 +56,4 @@ Status values:
 
 1. Preserve backward compatibility command groups through the end of `P18` stabilization window.
 2. Keep local gate-pack mandatory before merge (`unittest`, `validate --all --strict --skills`, `replay --check`, `doctor --git-boundary`).
+3. Maintain codex-first onboarding docs (`docs/NEW_PROJECT_ONBOARDING.md`) as user-facing source of truth.
