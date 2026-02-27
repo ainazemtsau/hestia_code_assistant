@@ -15,11 +15,11 @@ git --version
 python --version
 ```
 
-## 2. Скачать проект из GitHub
+## 2. Подготовить движок из GitHub (однократно)
 
 ```bash
 git clone https://github.com/ainazemtsau/hestia_code_assistant.git
-cd hestia_code_assistant
+# где угодно: например /home/anton/projects/hestia_code_assistant
 ```
 
 ## 3. Подготовить окружение (рекомендуется)
@@ -33,28 +33,33 @@ python -m pip install -e ".[dev]"
 
 Если не хотите ставить пакет в editable-режиме, можно работать через `./csk` без установки, но `python` всё равно должен быть `3.12+`.
 
-## 4. Первый запуск workflow
+## 4. Первый запуск workflow в вашем проекте
 
 ```bash
-./csk status --json
-./csk bootstrap
-./csk skills generate
-./csk status --json
+# В корне вашего проекта
+/home/anton/projects/hestia_code_assistant/csk bootstrap
 ```
 
-Ожидаемо:
-- `status: ok`
-- `skills.status: ok`
-- рекомендация `next.recommended` обычно `csk run`
-
-## 4.1 Если проект отдельный от репозитория `hestia_code_assistant`
-
-Если код продукта не находится в каталоге `hestia_code_assistant`, сделай:
+Или, если вы положили `csk` в корень проекта как `./csk`:
 
 ```bash
-ln -sf /path/to/hestia_code_assistant/csk ./csk
 ./csk bootstrap
 ```
+
+После bootstrap:
+- `csk status --json` -> `status: ok`
+- артефакты `.csk/` и `.agents/` создаются в корне вашего проекта.
+
+## 4.1 Если не хотите держать полный путь `.../hestia_code_assistant/csk`
+
+Если хотите вызывать `csk` одной командой без длинного пути:
+
+```bash
+ln -sfn /path/to/hestia_code_assistant/csk ~/.local/bin/csk
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Добавьте это в `~/.bashrc`/`~/.zshrc`.
 
 `./csk` берет `--root` из текущей папки (`PWD`), поэтому `.csk/` и `.agents/` создаются в вашем проекте, а не в `hestia_code_assistant`.
 

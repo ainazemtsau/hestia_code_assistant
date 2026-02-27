@@ -16,13 +16,13 @@ Explicit mode:
 ## 2. Entrypoint Policy
 
 Primary entrypoint:
-- `csk` (short wrapper, repository root script).
+- `csk` (short wrapper in your project root, often as a symlink to `hestia_code_assistant/csk`).
 
 Backend fallback:
 - `tools/cskh` remains available for compatibility and low-level operations.
 
 Runtime state for new projects:
-- inside repository root (`--state-root=<repo>` by default in `./csk`).
+- in the current working directory (`--state-root=<repo>` by default in `./csk`, one level above toolkit checkout when run from it).
 
 Do not commit runtime artifacts:
 - `.csk/`

@@ -5,9 +5,14 @@ CSK-Next v1 reference engine with enforced phase gates, wizard-first planning, a
 ## Quickstart
 
 ```bash
-# codex-first local mode (state inside repo root)
+# codex-first local mode (state in current project root)
 ./csk bootstrap
 ./csk
+# или после клона в подпапку: /path/to/project/hestia_code_assistant/csk bootstrap
+# bootstrap сам делает `skills generate` при первом запуске
+
+# for product repos outside hestia_code_assistant:
+# ln -sf /path/to/hestia_code_assistant/csk ./csk
 
 # same-root mode (legacy-compatible)
 PYTHONPATH=engine/python python -m csk_next.cli.main --root . bootstrap
