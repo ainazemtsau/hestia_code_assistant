@@ -126,6 +126,13 @@ def build_parser() -> argparse.ArgumentParser:
     module_status_p.add_argument("--json", action="store_true")
     module_status_p.set_defaults(handler=handlers.cmd_module_status)
 
+    module_worktree_p = module_sub.add_parser("worktree")
+    module_worktree_sub = module_worktree_p.add_subparsers(dest="module_worktree_cmd", required=True)
+    module_worktree_create_p = module_worktree_sub.add_parser("create")
+    module_worktree_create_p.add_argument("--module-id", required=True)
+    module_worktree_create_p.add_argument("--mission-id", required=True)
+    module_worktree_create_p.set_defaults(handler=handlers.cmd_module_worktree_create)
+
     worktree_p = sub.add_parser("worktree", help="Worktree utilities")
     worktree_sub = worktree_p.add_subparsers(dest="worktree_cmd", required=True)
     worktree_ensure_p = worktree_sub.add_parser("ensure")
@@ -336,6 +343,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate_p.add_argument("--strict", action="store_true")
     validate_p.add_argument("--skills", action="store_true")
     validate_p.set_defaults(handler=handlers.cmd_validate)
+
+    report_p = sub.add_parser("report")
+    report_sub = report_p.add_subparsers(dest="report_cmd", required=True)
+    report_manager_p = report_sub.add_parser("manager")
+    report_manager_p.set_defaults(handler=handlers.cmd_report_manager)
 
     update_p = sub.add_parser("update")
     update_sub = update_p.add_subparsers(dest="update_cmd", required=True)

@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-08
 - title: Retro Gate: обязательная ретроспектива + patch proposals
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

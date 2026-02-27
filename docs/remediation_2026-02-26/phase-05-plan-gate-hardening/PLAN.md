@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-05
 - title: Plan Gate hardening: critic -> freeze -> approve + drift enforcement
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

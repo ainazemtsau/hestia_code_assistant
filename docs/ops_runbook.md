@@ -96,6 +96,7 @@ Strict validation:
 ```bash
 ... validate --all --strict
 ... validate --all --strict --skills
+... report manager
 ```
 
 Doctor diagnostics:
@@ -143,6 +144,14 @@ Behavior:
 5. rollback + incident on failure
 
 `<state>/.csk/local` is preserved.
+
+## 8.1 Worktree create (module-scoped)
+
+```bash
+... module worktree create --module-id <m> --mission-id <M-####>
+```
+
+Creates/updates mission worktree mapping and create-status metadata.
 
 ## 9. Local Gate Pack Before Merge
 

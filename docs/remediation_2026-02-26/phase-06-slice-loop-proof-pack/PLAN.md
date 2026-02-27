@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-06
 - title: Slice execution loop: scope->verify->review->proof pack
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-11
 - title: Skills + UX для Codex
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

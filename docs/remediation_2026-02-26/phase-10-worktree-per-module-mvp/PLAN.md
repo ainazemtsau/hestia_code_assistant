@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-10
 - title: Worktree per module (MVP)
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

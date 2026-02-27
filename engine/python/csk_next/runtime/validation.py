@@ -11,7 +11,7 @@ from csk_next.domain.schemas import validate_schema
 from csk_next.io.files import read_json
 from csk_next.profiles.manager import load_profile_from_paths
 from csk_next.runtime.paths import Layout
-from csk_next.runtime.tasks import freeze_valid, task_dir, task_run_dir
+from csk_next.runtime.tasks import freeze_valid, task_dir, task_run_dir, resolve_critic_report_path
 
 
 class ValidationError(RuntimeError):
@@ -103,7 +103,7 @@ def _validate_task(layout: Layout, module_path: str, task_id: str, strict: bool,
     task_state_path = task_root / "task.json"
     slices_path = task_root / "slices.json"
     plan_path = task_root / "plan.md"
-    critic_path = task_root / "critic.json"
+    critic_path = resolve_critic_report_path(layout, module_path, task_id)
     freeze_path = task_root / "freeze.json"
     plan_approval_path = task_root / "approvals" / "plan.json"
     ready_approval_path = task_root / "approvals" / "ready.json"
@@ -156,8 +156,42 @@ def _validate_task(layout: Layout, module_path: str, task_id: str, strict: bool,
     if not plan_path.exists():
         errors.append(f"missing plan: {plan_path}")
 
+    critic_doc: dict[str, Any] | None = None
+    critic_doc_is_valid = False
+    if critic_path.exists():
+        critic_doc = read_json(critic_path)
+        try:
+            validate_schema("critic_report", critic_doc)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"invalid critic report {task_id}: {exc}")
+        else:
+            critic_doc_is_valid = True
+
     if status in {"critic_passed", "frozen", "plan_approved", "executing", "ready_validated", "ready_approved", "blocked", "retro_done", "closed"} and not critic_path.exists():
         errors.append(f"missing critic record for {task_id}")
+    if (
+        status in {
+            "critic_passed",
+            "frozen",
+            "plan_approved",
+            "executing",
+            "ready_validated",
+            "ready_approved",
+            "blocked",
+            "retro_done",
+            "closed",
+        }
+        and isinstance(critic_doc, dict)
+        and critic_doc_is_valid
+    ):
+        try:
+            p0 = int(critic_doc.get("p0", 1))
+            p1 = int(critic_doc.get("p1", 1))
+        except (TypeError, ValueError):
+            errors.append(f"invalid critic severity values for {task_id}: expected integers in p0/p1")
+        else:
+            if p0 > 0 or p1 > 0:
+                errors.append(f"critic report contains P0/P1 findings for {task_id}")
 
     if status in {"frozen", "plan_approved", "executing", "ready_validated", "ready_approved", "blocked", "retro_done", "closed"}:
         if not freeze_path.exists():

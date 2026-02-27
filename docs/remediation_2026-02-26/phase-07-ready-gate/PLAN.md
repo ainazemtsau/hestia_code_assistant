@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-07
 - title: READY Gate: validate -> handoff -> approve
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

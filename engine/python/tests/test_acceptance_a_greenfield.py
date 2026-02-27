@@ -262,7 +262,7 @@ class AcceptanceAGreenfieldTests(unittest.TestCase):
                 task_root_path / "task.json",
                 task_root_path / "plan.md",
                 task_root_path / "slices.json",
-                task_root_path / "critic.json",
+                task_root_path / "critic_report.json",
                 task_root_path / "freeze.json",
                 task_root_path / "approvals" / "plan.json",
                 task_root_path / "approvals" / "ready.json",

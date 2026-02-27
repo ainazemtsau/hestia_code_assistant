@@ -23,6 +23,7 @@ SCHEMAS: dict[str, SchemaDef] = {
     "mission_worktrees": SchemaDef(("mission_id", "module_worktrees", "opt_out_modules")),
     "task_state": SchemaDef(("task_id", "module_id", "status", "profile", "max_attempts", "slices")),
     "slices": SchemaDef(("slices",)),
+    "critic_report": SchemaDef(("task_id", "critic", "p0", "p1", "p2", "p3", "notes", "passed", "reviewed_at")),
     "freeze": SchemaDef(("task_id", "plan_sha256", "slices_sha256", "frozen_at")),
     "approval": SchemaDef(("approved_by", "approved_at")),
     "review_proof": SchemaDef(("task_id", "slice_id", "p0", "p1", "p2", "p3", "passed", "recorded_at")),
@@ -229,6 +230,18 @@ def _validate_verify_proof(data: dict[str, Any]) -> None:
             raise SchemaValidationError("executed_count must be >= 0")
 
 
+def _validate_critic_report(data: dict[str, Any]) -> None:
+    _require_type(data["task_id"], str, "task_id")
+    _require_type(data["critic"], str, "critic")
+    _require_type(data["notes"], str, "notes")
+    _require_type(data["passed"], bool, "passed")
+    _require_type(data["reviewed_at"], str, "reviewed_at")
+    for field in ["p0", "p1", "p2", "p3"]:
+        _require_type(data[field], int, field)
+        if data[field] < 0:
+            raise SchemaValidationError(f"Field '{field}' must be >= 0")
+
+
 def _validate_event_envelope(data: dict[str, Any]) -> None:
     _require_type(data["id"], str, "id")
     _require_type(data["ts"], str, "ts")
@@ -258,6 +271,7 @@ EXTRA_VALIDATORS = {
     "mission_worktrees": _validate_mission_worktrees,
     "profile": _validate_profile,
     "verify_proof": _validate_verify_proof,
+    "critic_report": _validate_critic_report,
     "event_envelope": _validate_event_envelope,
 }
 

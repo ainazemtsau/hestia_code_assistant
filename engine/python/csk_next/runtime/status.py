@@ -10,6 +10,7 @@ from csk_next.domain.state import ensure_registry
 from csk_next.eventlog.store import tail_events
 from csk_next.io.files import read_json
 from csk_next.runtime.paths import Layout
+from csk_next.runtime.tasks import freeze_valid
 from csk_next.skills.generator import validate_generated_skills
 
 
@@ -177,6 +178,14 @@ def _module_projection(layout: Layout, module_row: dict[str, Any], worktrees: di
             slices_total = len(slices)
             slices_done = sum(1 for row in slices.values() if isinstance(row, dict) and row.get("status") == "done")
     active_task_id = str(active["task_id"]) if active else None
+    plan_drift_reason: str | None = None
+    if active_task_id is not None and task_status in {"plan_approved", "executing", "ready_validated"}:
+        try:
+            freeze_ok, freeze_reason = freeze_valid(layout, module_path, active_task_id)
+        except Exception:  # noqa: BLE001
+            freeze_ok, freeze_reason = False, "freeze invalid"
+        if not freeze_ok:
+            plan_drift_reason = freeze_reason
     projection = {
         "module_id": module_id,
         "path": module_path,
@@ -200,6 +209,7 @@ def _module_projection(layout: Layout, module_row: dict[str, Any], worktrees: di
             if active_task_id is not None
             else None
         ),
+        "plan_drift_reason": plan_drift_reason,
     }
     return projection
 
@@ -324,6 +334,16 @@ def _status_next(
     module_id = str(active_module["module_id"])
     task_id = active_module.get("active_task_id")
     phase = str(active_module.get("phase", "IDLE"))
+    plan_drift_reason = str(active_module.get("plan_drift_reason") or "")
+
+    if plan_drift_reason and task_id:
+        alternatives = [f"csk module {module_id}", "csk status --json"]
+        if phase == "READY_VALIDATED":
+            alternatives.append(f"csk approve --module-id {module_id} --task-id {task_id} --approved-by <human>")
+        return {
+            "recommended": f"csk task critic --module-id {module_id} --task-id {task_id}",
+            "alternatives": alternatives,
+        }
 
     if phase in {"PLAN_FROZEN", "READY_VALIDATED"} and task_id:
         return {
@@ -395,6 +415,15 @@ def _module_next(module_projection: dict[str, Any]) -> dict[str, Any]:
 
     task_id = module_projection["active_task_id"]
     phase = module_projection["phase"]
+    plan_drift_reason = str(module_projection.get("plan_drift_reason") or "")
+    if plan_drift_reason and task_id:
+        alternatives = [f"csk module {module_id}", "csk status --json"]
+        if phase == "READY_VALIDATED":
+            alternatives.append(f"csk approve --module-id {module_id} --task-id {task_id} --approved-by <human>")
+        return {
+            "recommended": f"csk task critic --module-id {module_id} --task-id {task_id}",
+            "alternatives": alternatives,
+        }
     if phase in {"PLAN_FROZEN", "READY_VALIDATED"} and task_id:
         return {
             "recommended": f"csk approve --module-id {module_id} --task-id {task_id} --approved-by <human>",

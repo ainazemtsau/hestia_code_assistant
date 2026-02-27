@@ -8,7 +8,7 @@
 | `.csk/modules/tasks/T-0001/task.json` | `csk task new` | `status=retro_done` в финале. |
 | `.csk/modules/tasks/T-0001/plan.md` | `csk task new` | План зафиксирован до freeze. |
 | `.csk/modules/tasks/T-0001/slices.json` | fixture update | Содержит `S-0001` и `S-0002` с корректными deps. |
-| `.csk/modules/tasks/T-0001/critic.json` | `csk task critic` | `p0=0`, `p1=0`, `passed=true`. |
+| `.csk/modules/tasks/T-0001/critic_report.json` | `csk task critic` | `p0=0`, `p1=0`, `passed=true`. |
 | `.csk/modules/tasks/T-0001/freeze.json` | `csk task freeze` | Имеет plan/slices hashes. |
 | `.csk/modules/tasks/T-0001/approvals/plan.json` | `csk task approve-plan` | Plan approval записан. |
 | `.csk/modules/tasks/T-0001/approvals/ready.json` | `csk gate approve-ready` | READY approval записан. |

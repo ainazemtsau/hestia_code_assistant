@@ -63,6 +63,7 @@ Hard constraints:
 - `csk module <id>` / `csk module status --module-id <id>`
 - `csk retro`
 - `csk replay --check`
+- `csk report manager`
 - `csk validate --all --strict --skills`
 - `csk doctor run --git-boundary`
 
@@ -71,7 +72,7 @@ Hard constraints:
 - `csk slice *` (`run`, `mark`)
 - `csk gate *` (`scope-check`, `verify`, `record-review`, `validate-ready`, `approve-ready`)
 - `csk wizard *` (`start`, `answer`, `status`)
-- `csk mission *`, `csk worktree ensure`
+- `csk mission *`, `csk worktree ensure`, `csk module worktree create`
 - `csk event *`, `csk incident *`
 
 ## Artifact Contract (Paths + Minimal Schema Keys)
@@ -81,6 +82,7 @@ Hard constraints:
 | Registry | `.csk/app/registry.json` | `schema_version`, `modules[module_id,path,registered,initialized,created_at,updated_at]`, `defaults`, `updated_at` |
 | Task state | `.csk/modules/<module_path>/tasks/T-*/task.json` | `task_id`, `module_id`, `status`, `profile`, `max_attempts`, `slices` |
 | Slices | `.csk/modules/<module_path>/tasks/T-*/slices.json` | `slices` |
+| Critic report | `.csk/modules/<module_path>/tasks/T-*/critic_report.json` | `task_id`, `critic`, `p0..p3`, `notes`, `passed`, `reviewed_at` |
 | Freeze | `.csk/modules/<module_path>/tasks/T-*/freeze.json` | `task_id`, `plan_sha256`, `slices_sha256`, `frozen_at` |
 | Approval | `.csk/modules/<module_path>/tasks/T-*/approvals/*.json` | `approved_by`, `approved_at` |
 | Scope proof | `.csk/modules/<module_path>/run/tasks/T-*/proofs/<slice>/scope.json` | `task_id`, `slice_id`, `passed`, `violations`, `checked_at` |

@@ -35,6 +35,7 @@ from csk_next.runtime.modules import (
 from csk_next.runtime.pkm import build_pkm
 from csk_next.runtime.paths import Layout, resolve_layout
 from csk_next.runtime.proofs import proof_dir
+from csk_next.runtime.reporting import manager_report_v2
 from csk_next.runtime.replay import replay_check
 from csk_next.runtime.retro import run_retro
 from csk_next.runtime.state_migration import migrate_state
@@ -51,7 +52,7 @@ from csk_next.runtime.tasks_engine import (
 )
 from csk_next.runtime.time import utc_now_iso
 from csk_next.runtime.validation import ValidationError, validate_all
-from csk_next.runtime.worktrees import ensure_worktrees_for_mission
+from csk_next.runtime.worktrees import create_module_worktree, ensure_worktrees_for_mission
 from csk_next.skills.generator import generate_skills, validate_generated_skills
 from csk_next.update.engine import update_engine
 from csk_next.wizard.runner import run_wizard, wizard_answer, wizard_start, wizard_status
@@ -296,6 +297,90 @@ def cmd_module_status(args: argparse.Namespace) -> dict[str, Any]:
     if args.module_id is None:
         return project_root_status(layout)
     return project_module_status(layout, args.module_id)
+
+
+def cmd_module_worktree_create(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    _resolve_module(layout, args.module_id)
+    mission_dir = layout.missions / args.mission_id
+    if not mission_dir.exists():
+        raise FileNotFoundError(f"Mission not found: {args.mission_id}")
+
+    worktrees_path = mission_dir / "worktrees.json"
+    if worktrees_path.exists():
+        worktrees = read_json(worktrees_path)
+    else:
+        worktrees = {"mission_id": args.mission_id, "module_worktrees": {}, "opt_out_modules": []}
+    if str(worktrees.get("mission_id", args.mission_id)) != args.mission_id:
+        raise ValueError(f"worktrees.json mission_id mismatch for mission {args.mission_id}")
+
+    info = create_module_worktree(
+        repo_root=layout.repo_root,
+        state_root=layout.state_root,
+        mission_id=args.mission_id,
+        module_id=args.module_id,
+    )
+    worktrees.setdefault("module_worktrees", {})[args.module_id] = str(info["path"])
+    create_status = worktrees.setdefault("create_status", {})
+    create_status[args.module_id] = {
+        "created": bool(info["created"]),
+        "branch": str(info["branch"]),
+        "fallback_reason": info["fallback_reason"],
+    }
+
+    opt_out_modules = [str(item) for item in worktrees.get("opt_out_modules", [])]
+    if bool(info["created"]):
+        worktrees["opt_out_modules"] = [item for item in opt_out_modules if item != args.module_id]
+    else:
+        if args.module_id not in opt_out_modules:
+            opt_out_modules.append(args.module_id)
+        worktrees["opt_out_modules"] = opt_out_modules
+
+    write_json(worktrees_path, worktrees)
+    append_event(
+        layout=layout,
+        event_type="worktree.created" if bool(info["created"]) else "worktree.failed",
+        actor="engine",
+        mission_id=args.mission_id,
+        module_id=args.module_id,
+        payload={
+            "mission_id": args.mission_id,
+            "module_id": args.module_id,
+            "path": str(info["path"]),
+            "branch": str(info["branch"]),
+            "created": bool(info["created"]),
+            "fallback_reason": info["fallback_reason"],
+        },
+        artifact_refs=[str(worktrees_path)],
+    )
+    if not bool(info["created"]):
+        incident = make_incident(
+            severity="medium",
+            kind="worktree_create_failed",
+            phase="routing",
+            module_id=args.module_id,
+            message=f"Worktree not created for module {args.module_id}",
+            remediation="Continue with no-worktree mode or create worktree manually.",
+            context={
+                "mission_id": args.mission_id,
+                "stderr": str(info.get("stderr", "")),
+                "fallback_reason": info.get("fallback_reason"),
+            },
+        )
+        log_incident(layout.app_incidents, incident)
+
+    return {
+        "status": "ok" if bool(info["created"]) else "failed",
+        "mission_id": args.mission_id,
+        "module_id": args.module_id,
+        "worktree": {
+            "created": bool(info["created"]),
+            "path": str(info["path"]),
+            "branch": str(info["branch"]),
+            "fallback_reason": info["fallback_reason"],
+        },
+        "path": str(worktrees_path),
+    }
 
 
 def cmd_worktree_ensure(args: argparse.Namespace) -> dict[str, Any]:
@@ -709,6 +794,11 @@ def cmd_validate(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def cmd_report_manager(args: argparse.Namespace) -> dict[str, Any]:
+    layout = _layout(args)
+    return manager_report_v2(layout)
+
+
 def cmd_update_engine(args: argparse.Namespace) -> dict[str, Any]:
     layout = _layout(args)
     return update_engine(layout)
@@ -756,8 +846,18 @@ def cmd_replay(args: argparse.Namespace) -> dict[str, Any]:
         },
     )
     if failed:
-        return {"status": "replay_failed", "replay": replay}
-    return {"status": "ok", "replay": replay}
+        return {
+            "status": "replay_failed",
+            "replay": replay,
+            "next": replay.get("next"),
+            "artifact_refs": list(replay.get("refs", [])),
+        }
+    return {
+        "status": "ok",
+        "replay": replay,
+        "next": replay.get("next"),
+        "artifact_refs": list(replay.get("refs", [])),
+    }
 
 
 def cmd_skills_generate(args: argparse.Namespace) -> dict[str, Any]:
@@ -777,7 +877,7 @@ def _completion_script(shell: str) -> str:
             "  local cur prev opts\n"
             "  COMPREPLY=()\n"
             "  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
-            "  opts=\"status new run approve module retro replay completion context pkm skills\"\n"
+            "  opts=\"status new run approve module retro replay report completion context pkm skills\"\n"
             "  COMPREPLY=( $(compgen -W \"${opts}\" -- ${cur}) )\n"
             "  return 0\n"
             "}\n"
@@ -788,14 +888,14 @@ def _completion_script(shell: str) -> str:
             "#compdef csk\n"
             "_csk_complete() {\n"
             "  local -a commands\n"
-            "  commands=(status new run approve module retro replay completion context pkm skills)\n"
+            "  commands=(status new run approve module retro replay report completion context pkm skills)\n"
             "  _describe 'command' commands\n"
             "}\n"
             "compdef _csk_complete csk\n"
         )
     return (
         "complete -c csk -f\n"
-        "complete -c csk -a \"status new run approve module retro replay completion context pkm skills\"\n"
+        "complete -c csk -a \"status new run approve module retro replay report completion context pkm skills\"\n"
     )
 
 

@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-12
 - title: Update engine (rollback-safe) + manager report v2
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

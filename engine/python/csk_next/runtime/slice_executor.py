@@ -10,7 +10,7 @@ from csk_next.eventlog.store import append_event
 from csk_next.gates.review import record_review
 from csk_next.gates.scope import check_scope
 from csk_next.gates.verify import parse_cmds, run_verify
-from csk_next.io.files import write_json
+from csk_next.io.files import read_json, write_json
 from csk_next.io.runner import run_argv
 from csk_next.profiles.manager import load_profile_from_paths
 from csk_next.runtime.config import command_policy
@@ -64,6 +64,75 @@ def _run_e2e(task_id: str, slice_id: str, task_run: Path, cwd: Path, commands: l
     return payload
 
 
+def _plan_recovery_next(module_id: str, task_id: str) -> dict[str, Any]:
+    return {
+        "recommended": f"csk task critic --module-id {module_id} --task-id {task_id}",
+        "alternatives": [
+            f"csk task freeze --module-id {module_id} --task-id {task_id}",
+            f"csk approve --module-id {module_id} --task-id {task_id} --approved-by <human>",
+        ],
+    }
+
+
+def _plan_gate_failed(
+    *,
+    module_id: str,
+    task_id: str,
+    slice_id: str,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "status": "gate_failed",
+        "gate": "plan",
+        "reason": reason,
+        "slice_id": slice_id,
+        "next": _plan_recovery_next(module_id, task_id),
+    }
+
+
+def _resolve_module_workdir(
+    *,
+    layout: Layout,
+    module_id: str,
+    module_path: str,
+    task_state: dict[str, Any],
+) -> Path:
+    default_root = layout.module_root(module_path)
+    mission_id = task_state.get("mission_id")
+    if not isinstance(mission_id, str) or not mission_id:
+        return default_root
+
+    worktrees_path = layout.missions / mission_id / "worktrees.json"
+    if not worktrees_path.exists():
+        return default_root
+
+    try:
+        worktrees = read_json(worktrees_path)
+    except Exception:  # noqa: BLE001
+        return default_root
+
+    module_worktrees = worktrees.get("module_worktrees", {})
+    create_status = worktrees.get("create_status", {})
+    worktree_path = module_worktrees.get(module_id)
+    if not isinstance(worktree_path, str) or not worktree_path:
+        return default_root
+
+    status_row = create_status.get(module_id, {}) if isinstance(create_status, dict) else {}
+    if isinstance(status_row, dict) and status_row.get("created") is False:
+        return default_root
+
+    candidate = Path(worktree_path)
+    if not candidate.exists():
+        return default_root
+    if module_path == ".":
+        module_candidate = candidate
+    else:
+        module_candidate = candidate / Path(module_path)
+    if not module_candidate.exists():
+        return default_root
+    return module_candidate
+
+
 def execute_slice(
     *,
     layout: Layout,
@@ -85,6 +154,12 @@ def execute_slice(
     module_path = module["path"]
 
     state = read_task_state(layout, module_path, task_id)
+    module_root = _resolve_module_workdir(
+        layout=layout,
+        module_id=module_id,
+        module_path=module_path,
+        task_state=state,
+    )
     if state["status"] == "blocked":
         slice_state = state.get("slices", {}).get(slice_id, {})
         return {
@@ -94,15 +169,34 @@ def execute_slice(
             "reason": state.get("blocked_reason") or "task blocked",
         }
 
-    ensure_task_executable(layout, module_path, task_id)
-    mark_task_executing(layout, module_path, task_id)
+    try:
+        ensure_task_executable(layout, module_path, task_id)
+    except ValueError as exc:
+        return _plan_gate_failed(
+            module_id=module_id,
+            task_id=task_id,
+            slice_id=slice_id,
+            reason=str(exc),
+        )
 
     if not plan_approval_path(layout, module_path, task_id).exists():
-        raise ValueError("Task execution blocked: missing plan approval")
+        return _plan_gate_failed(
+            module_id=module_id,
+            task_id=task_id,
+            slice_id=slice_id,
+            reason="missing plan approval",
+        )
 
     freeze_ok, freeze_reason = freeze_valid(layout, module_path, task_id)
     if not freeze_ok:
-        raise ValueError(f"Task execution blocked: {freeze_reason}")
+        return _plan_gate_failed(
+            module_id=module_id,
+            task_id=task_id,
+            slice_id=slice_id,
+            reason=freeze_reason,
+        )
+
+    mark_task_executing(layout, module_path, task_id)
 
     state = read_task_state(layout, module_path, task_id)
     slices_doc = load_slices(layout, module_path, task_id)
@@ -164,7 +258,6 @@ def execute_slice(
         attempts=attempts,
     )
 
-    module_root = layout.module_root(module_path)
     before = take_snapshot(module_root)
 
     if implement_cmd:

@@ -114,7 +114,12 @@ Use these commands in user-facing flow:
 - example: `./csk replay --check`
 - expected `NEXT`: remediation command if violations exist
 
-8. `csk status --json`
+8. `csk report manager`
+- when: generate manager-level workflow health report
+- example: `./csk report manager`
+- expected `NEXT`: `csk status --json`
+
+9. `csk status --json`
 - when: machine-readable diagnostics for Codex/automation
 - example: `./csk status --json`
 - expected `NEXT`: often mirrors dashboard recommendation

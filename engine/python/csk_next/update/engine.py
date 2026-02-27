@@ -37,7 +37,13 @@ def update_engine(layout: Layout) -> dict[str, Any]:
 
         validate_all(layout, strict=True)
         shutil.rmtree(backup)
-        return {"status": "ok", "engine_updated": True}
+        return {
+            "status": "ok",
+            "engine_updated": True,
+            "backup_path": str(backup),
+            "backup_removed": True,
+            "validate_status": "ok",
+        }
     except Exception as exc:  # noqa: BLE001
         if layout.engine.exists():
             shutil.rmtree(layout.engine)
@@ -52,4 +58,10 @@ def update_engine(layout: Layout) -> dict[str, Any]:
             context={},
         )
         log_incident(layout.app_incidents, incident)
-        return {"status": "failed", "rolled_back": True, "error": str(exc), "incident": incident}
+        return {
+            "status": "failed",
+            "rolled_back": True,
+            "error": str(exc),
+            "incident": incident,
+            "backup_path": str(backup),
+        }

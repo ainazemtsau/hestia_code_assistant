@@ -18,6 +18,7 @@ from csk_next.profiles.manager import merge_profile
 from csk_next.runtime.paths import resolve_layout
 from csk_next.runtime.tasks_engine import mark_task_blocked, mark_task_status
 from csk_next.skills.generator import generate_skills
+from csk_next.runtime.replay import _recommend_next
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -104,6 +105,136 @@ class UnitTests(unittest.TestCase):
             )
             self.assertEqual(payload["status"], "error")
             self.assertIn("freeze drift", payload["error"])
+
+    def test_critic_p1_blocks_freeze(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id, "--p1", "1")
+            payload = run_cli(
+                root,
+                "task",
+                "freeze",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                expect_code=2,
+            )
+            self.assertEqual(payload["status"], "error")
+            self.assertIn("P0/P1", payload.get("error", ""))
+
+    def test_slice_run_without_plan_gate_returns_recovery_next(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+
+            payload = run_cli(
+                root,
+                "slice",
+                "run",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--slice-id",
+                "S-0001",
+                expect_code=10,
+            )
+            self.assertEqual(payload["status"], "gate_failed")
+            self.assertEqual(payload["gate"], "plan")
+            self.assertIn("next", payload)
+            self.assertIn("csk task critic --module-id app", payload["next"]["recommended"])
+
+            state = run_cli(root, "task", "status", "--module-id", "app", "--task-id", task_id)
+            self.assertEqual(state["task"]["status"], "draft")
+
+    def test_plan_drift_blocks_slice_run_and_preserves_plan_approved_status(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "approve-plan", "--module-id", "app", "--task-id", task_id, "--approved-by", "tester")
+
+            plan = module_state_root(root, "mod/app") / "tasks" / task_id / "plan.md"
+            plan.write_text(plan.read_text(encoding="utf-8") + "\nDrift\n", encoding="utf-8")
+
+            payload = run_cli(
+                root,
+                "slice",
+                "run",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--slice-id",
+                "S-0001",
+                expect_code=10,
+            )
+            self.assertEqual(payload["status"], "gate_failed")
+            self.assertEqual(payload["gate"], "plan")
+            self.assertEqual(payload["reason"], "plan drift")
+            self.assertIn("csk task critic --module-id app", payload["next"]["recommended"])
+
+            state = run_cli(root, "task", "status", "--module-id", "app", "--task-id", task_id)
+            self.assertEqual(state["task"]["status"], "plan_approved")
+
+    def test_reapproval_chain_after_drift_allows_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "approve-plan", "--module-id", "app", "--task-id", task_id, "--approved-by", "tester")
+
+            plan = module_state_root(root, "mod/app") / "tasks" / task_id / "plan.md"
+            plan.write_text(plan.read_text(encoding="utf-8") + "\nDrift\n", encoding="utf-8")
+            run_cli(
+                root,
+                "slice",
+                "run",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--slice-id",
+                "S-0001",
+                expect_code=10,
+            )
+
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "approve-plan", "--module-id", "app", "--task-id", task_id, "--approved-by", "tester")
+            result = run_cli(
+                root,
+                "slice",
+                "run",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--slice-id",
+                "S-0001",
+            )
+            self.assertEqual(result["status"], "done")
 
     def test_profile_merge(self) -> None:
         base = {
@@ -370,6 +501,85 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(data["skills"]["missing"], [])
             self.assertEqual(data["skills"]["modified"], [])
             self.assertEqual(data["skills"]["stale"], [])
+
+    def test_status_next_recommends_reapproval_chain_on_plan_drift(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "modules/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+            run_cli(root, "task", "approve-plan", "--module-id", "app", "--task-id", task_id, "--approved-by", "tester")
+
+            plan = module_state_root(root, "modules/app") / "tasks" / task_id / "plan.md"
+            plan.write_text(plan.read_text(encoding="utf-8") + "\nDrift\n", encoding="utf-8")
+
+            status_payload = run_cli(root, "status", "--json")
+            self.assertEqual(status_payload["status"], "ok")
+            self.assertEqual(
+                status_payload["next"]["recommended"],
+                f"csk task critic --module-id app --task-id {task_id}",
+            )
+            module_payload = run_cli(root, "module", "status", "--module-id", "app")
+            self.assertEqual(
+                module_payload["next"]["recommended"],
+                f"csk task critic --module-id app --task-id {task_id}",
+            )
+
+    def test_task_transition_allows_ready_approval_rework(self) -> None:
+        ensure_task_transition("ready_approved", "ready_validated")
+
+    def test_task_transition_allows_ready_validated_recritic(self) -> None:
+        ensure_task_transition("ready_validated", "critic_passed")
+
+    def test_replay_next_recommends_gate_approve_ready_for_missing_ready_approval(self) -> None:
+        next_block = _recommend_next(
+            {
+                "kind": "missing_ready_approval",
+                "module_id": "app",
+                "task_id": "T-0001",
+            }
+        )
+        self.assertEqual(
+            next_block["recommended"],
+            "csk gate approve-ready --module-id app --task-id T-0001 --approved-by <human>",
+        )
+
+    def test_task_freeze_and_plan_approve_accept_legacy_critic_artifact(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            run_cli(root, "module", "add", "--path", "mod/app", "--module-id", "app")
+            run_cli(root, "module", "init", "--module-id", "app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+
+            run_cli(root, "task", "critic", "--module-id", "app", "--task-id", task_id)
+            task_root = module_state_root(root, "mod/app") / "tasks" / task_id
+            primary = task_root / "critic_report.json"
+            legacy = task_root / "critic.json"
+            primary.replace(legacy)
+            self.assertFalse(primary.exists())
+            self.assertTrue(legacy.exists())
+
+            run_cli(root, "task", "freeze", "--module-id", "app", "--task-id", task_id)
+            run_cli(
+                root,
+                "task",
+                "approve-plan",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--approved-by",
+                "tester",
+            )
+            status = run_cli(root, "task", "status", "--module-id", "app", "--task-id", task_id)
+            self.assertEqual(status["task"]["status"], "plan_approved")
+            self.assertTrue(primary.exists())
 
     def test_status_next_prefers_skills_generate_when_skills_are_drifted(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -1056,6 +1266,7 @@ class UnitTests(unittest.TestCase):
             replay = run_cli(root, "replay", "--check", expect_code=30)
             self.assertEqual(replay["status"], "replay_failed")
             self.assertGreater(len(user_data(replay)["replay"]["violations"]), 0)
+            self.assertIn("recommended", replay["next"])
 
     def test_replay_error_includes_next_for_user_flow(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -1065,6 +1276,20 @@ class UnitTests(unittest.TestCase):
             self.assertEqual(payload["status"], "error")
             self.assertIn("next", payload)
             self.assertEqual(payload["next"]["recommended"], "csk replay --check")
+
+    def test_report_manager_generates_v2_artifact(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            payload = run_cli(root, "report", "manager")
+            self.assertEqual(payload["status"], "ok")
+            data = user_data(payload)
+            report = data["report"]
+            self.assertEqual(report["version"], "2")
+            self.assertIn("counters", report)
+            self.assertIn("non_ok_events", report)
+            self.assertIn("transcript_refs", report)
+            self.assertTrue(Path(data["path"]).exists())
 
     def test_completion_prints_raw_script(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -1108,6 +1333,14 @@ class UnitTests(unittest.TestCase):
             text = generated.read_text(encoding="utf-8")
             self.assertIn("$csk-status", text)
             self.assertIn("NEXT:", text)
+
+    def test_generated_skills_include_flow_wrappers(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_cli(root, "bootstrap")
+            for skill_name in ["csk-new", "csk-run", "csk-approve", "csk-replay", "csk-update"]:
+                generated = root / ".agents" / "skills" / skill_name / "SKILL.md"
+                self.assertTrue(generated.exists(), msg=str(generated))
 
     def test_generated_skills_keep_frontmatter_before_generated_marker(self) -> None:
         with TemporaryDirectory() as temp_dir:

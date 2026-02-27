@@ -369,6 +369,106 @@ class AcceptanceTests(unittest.TestCase):
             self.assertTrue(worktrees["create_status"]["app"]["created"])
             self.assertTrue(Path(worktrees["module_worktrees"]["app"]).exists())
 
+    def test_module_worktree_create_updates_mapping(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            setup_module(root, "app", "modules/app")
+            mission = run_cli(
+                root,
+                "mission",
+                "new",
+                "--title",
+                "Deferred worktree mission",
+                "--summary",
+                "Create worktree via module command",
+                "--modules",
+                "app",
+                "--no-task-stubs",
+                "--no-worktree",
+            )
+            self.assertEqual(mission["status"], "ok")
+
+            created = run_cli(
+                root,
+                "module",
+                "worktree",
+                "create",
+                "--module-id",
+                "app",
+                "--mission-id",
+                mission["mission_id"],
+            )
+            self.assertEqual(created["status"], "ok")
+            self.assertTrue(created["worktree"]["created"])
+
+            worktrees_path = root / ".csk" / "app" / "missions" / mission["mission_id"] / "worktrees.json"
+            worktrees = json.loads(worktrees_path.read_text(encoding="utf-8"))
+            self.assertTrue(worktrees["create_status"]["app"]["created"])
+            self.assertTrue(Path(worktrees["module_worktrees"]["app"]).exists())
+            self.assertNotIn("app", worktrees["opt_out_modules"])
+
+    def test_slice_run_uses_module_worktree_workdir(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            setup_module(root, "app", "modules/app")
+            module_root = root / "modules" / "app"
+            module_root.mkdir(parents=True, exist_ok=True)
+            (module_root / "README.md").write_text("module app\n", encoding="utf-8")
+            subprocess.run(["git", "add", "modules/app"], cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["git", "-c", "user.name=Tester", "-c", "user.email=tester@example.com", "commit", "-m", "add module"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            mission = run_cli(
+                root,
+                "mission",
+                "new",
+                "--title",
+                "Workdir mission",
+                "--summary",
+                "Slice should execute in worktree",
+                "--modules",
+                "app",
+            )
+            self.assertEqual(mission["status"], "ok")
+            task_id = mission["tasks_created"][0]
+
+            slices_path = module_state_root(root, "modules/app") / "tasks" / task_id / "slices.json"
+            slices_doc = json.loads(slices_path.read_text(encoding="utf-8"))
+            slices_doc["slices"][0]["allowed_paths"] = ["worktree_marker.txt"]
+            slices_path.write_text(json.dumps(slices_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            approve_plan(root, "app", task_id)
+            payload = run_cli(
+                root,
+                "slice",
+                "run",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--slice-id",
+                "S-0001",
+                "--implement",
+                "python -c \"from pathlib import Path; Path('worktree_marker.txt').write_text('ok\\n', encoding='utf-8')\"",
+            )
+            self.assertEqual(payload["status"], "done")
+
+            worktrees_path = root / ".csk" / "app" / "missions" / mission["mission_id"] / "worktrees.json"
+            worktrees = json.loads(worktrees_path.read_text(encoding="utf-8"))
+            worktree_root = Path(worktrees["module_worktrees"]["app"])
+            marker_in_worktree = worktree_root / "modules" / "app" / "worktree_marker.txt"
+            marker_in_root = root / "modules" / "app" / "worktree_marker.txt"
+            self.assertTrue(marker_in_worktree.exists())
+            self.assertFalse(marker_in_root.exists())
+
     def test_acceptance_c_cross_module_api_change(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -419,6 +519,46 @@ class AcceptanceTests(unittest.TestCase):
             )
             self.assertEqual(ready["status"], "failed")
             self.assertFalse(ready["ready"]["checks"]["verify_coverage_ok"]["passed"])
+
+    def test_replay_fails_when_ready_handoff_missing(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertEqual(run_cli(root, "bootstrap")["status"], "ok")
+            setup_module(root, "app", "modules/app")
+            task = run_cli(root, "task", "new", "--module-id", "app")
+            task_id = task["task_id"]
+            approve_plan(root, "app", task_id)
+            run_slice_to_done(root, "app", task_id)
+            validate_ready = run_cli(root, "gate", "validate-ready", "--module-id", "app", "--task-id", task_id)
+            self.assertEqual(validate_ready["status"], "ok")
+            run_cli(
+                root,
+                "gate",
+                "approve-ready",
+                "--module-id",
+                "app",
+                "--task-id",
+                task_id,
+                "--approved-by",
+                "tester",
+            )
+
+            handoff_path = (
+                module_state_root(root, "modules/app")
+                / "run"
+                / "tasks"
+                / task_id
+                / "proofs"
+                / "READY"
+                / "handoff.md"
+            )
+            handoff_path.unlink()
+
+            replay = run_cli(root, "replay", "--check", expect_code=30)
+            self.assertEqual(replay["status"], "replay_failed")
+            violations = user_data(replay)["replay"]["violations"]
+            self.assertTrue(any(str(handoff_path) in row for row in violations))
+            self.assertIn("validate-ready", replay["next"]["recommended"])
 
     def test_retro_denied_before_ready_approval(self) -> None:
         with TemporaryDirectory() as temp_dir:

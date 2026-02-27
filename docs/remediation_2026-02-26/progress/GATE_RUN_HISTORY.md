@@ -64,3 +64,75 @@ Append-only журнал обязательного gate-pack после зав�
 - doctor_git_boundary_status: ok
 - overall: pass
 - notes: Phase-04 wizard scripted routing complete (`--answers @file`, `--answers-json`, step-id validation, module mapping suggestions without auto-accept, materialization result contract).
+
+## Entry 006
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-05
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Plan gate hardening complete (`critic_report`, strict approve preconditions, plan drift recovery NEXT).
+
+## Entry 007
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-06
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Slice loop/proof-pack invariants confirmed via full regression suite.
+
+## Entry 008
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-07
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: READY gate handoff enrichment and negative replay path verified.
+
+## Entry 009
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-08
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Retro gate mandatory path and artifacts verified.
+
+## Entry 010
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-09
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Replay hardening complete with extended invariants and chronological processing fix.
+
+## Entry 011
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-10
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Module worktree create + execution workdir mapping delivered and tested.
+
+## Entry 012
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-11
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Skills UX wrappers for core user flows added and validated.
+
+## Entry 013
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-12
+- validate_status: ok
+- replay_status: ok
+- doctor_git_boundary_status: ok
+- overall: pass
+- notes: Manager report v2 and update-engine metadata enhancements delivered.

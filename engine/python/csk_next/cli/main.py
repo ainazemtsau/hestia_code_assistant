@@ -13,7 +13,7 @@ from csk_next.runtime.paths import resolve_layout
 from csk_next.runtime.status import project_module_status, project_root_status
 
 
-_MODULE_SUBCOMMANDS = {"list", "show", "add", "init", "status"}
+_MODULE_SUBCOMMANDS = {"list", "show", "add", "init", "status", "worktree"}
 _USER_FACING_COMMANDS = {
     "status",
     "new",
@@ -22,6 +22,7 @@ _USER_FACING_COMMANDS = {
     "module status",
     "retro run",
     "replay",
+    "report manager",
 }
 
 
@@ -184,6 +185,7 @@ def _command_name(args: argparse.Namespace) -> str:
         "registry_cmd",
         "wizard_cmd",
         "module_cmd",
+        "module_worktree_cmd",
         "worktree_cmd",
         "mission_cmd",
         "task_cmd",
@@ -193,6 +195,7 @@ def _command_name(args: argparse.Namespace) -> str:
         "event_cmd",
         "incident_cmd",
         "retro_cmd",
+        "report_cmd",
         "context_cmd",
         "pkm_cmd",
         "skills_cmd",
@@ -241,6 +244,8 @@ def _error_next(command_name: str, args: argparse.Namespace) -> dict[str, Any] |
         return {"recommended": "csk status --json", "alternatives": ["csk run"]}
     if command_name == "replay":
         return {"recommended": "csk replay --check", "alternatives": ["csk status --json"]}
+    if command_name == "report manager":
+        return {"recommended": "csk status --json", "alternatives": ["csk report manager"]}
     return None
 
 

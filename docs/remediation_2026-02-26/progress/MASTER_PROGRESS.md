@@ -181,3 +181,205 @@ Append-only журнал прогресса remediation-фаз `phase-00..phase-
   - Blocking risks отсутствуют.
 - next_recovery_or_next_phase:
   - Стартовать `phase-05-plan-gate-hardening` отдельной сессией.
+
+## Entry 006 (phase-05 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-05
+- status: done
+- implemented_changes:
+  - Plan gate hardened: `critic_report.json` contract, freeze/approve preconditions, drift-aware re-approval chain and actionable NEXT on plan gate failures.
+- artifacts_paths:
+  - engine/python/csk_next/runtime/{tasks.py,tasks_engine.py,slice_executor.py,status.py,validation.py}
+  - engine/python/csk_next/domain/{models.py,schemas.py}
+  - engine/python/tests/test_unit.py
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Replay ordering drift обнаружен и закрыт в phase-09.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-06-slice-loop-proof-pack`.
+
+## Entry 007 (phase-06 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-06
+- status: done
+- implemented_changes:
+  - Slice loop и proof-pack flow подтверждены regression-пакетом; replay учитывает manifest из `slice.completed` refs.
+- artifacts_paths:
+  - engine/python/csk_next/runtime/{slice_executor.py,replay.py}
+  - engine/python/tests/{test_unit.py,test_acceptance.py,test_acceptance_a_greenfield.py}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-07-ready-gate`.
+
+## Entry 008 (phase-07 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-07
+- status: done
+- implemented_changes:
+  - READY handoff enriched (changed files/verify commands/smoke steps), negative replay path validated for missing handoff.
+- artifacts_paths:
+  - engine/python/csk_next/gates/ready.py
+  - engine/python/csk_next/runtime/replay.py
+  - engine/python/tests/test_acceptance.py
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-08-retro-gate`.
+
+## Entry 009 (phase-08 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-08
+- status: done
+- implemented_changes:
+  - Mandatory retro gate подтверждён: preconditions и artifacts (`retro.md`, patch proposals) закрыты acceptance regression.
+- artifacts_paths:
+  - engine/python/csk_next/runtime/retro.py
+  - engine/python/tests/{test_acceptance.py,test_acceptance_a_greenfield.py}
+  - docs/acceptance/A_EXPECTED_ARTIFACTS.md
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-09-replay-hardening`.
+
+## Entry 010 (phase-09 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-09
+- status: done
+- implemented_changes:
+  - Replay invariant engine расширен и стабилизирован (path-aware violations, NEXT remediation, chronological event processing).
+- artifacts_paths:
+  - engine/python/csk_next/runtime/replay.py
+  - engine/python/csk_next/cli/handlers.py
+  - engine/python/tests/{test_unit.py,test_acceptance.py,test_acceptance_a_greenfield.py}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-10-worktree-per-module-mvp`.
+
+## Entry 011 (phase-10 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-10
+- status: done
+- implemented_changes:
+  - Added `csk module worktree create` and mission worktree mapping updates; slice execution now honors mission module workdir.
+- artifacts_paths:
+  - engine/python/csk_next/cli/{parser.py,main.py,handlers.py}
+  - engine/python/csk_next/runtime/slice_executor.py
+  - engine/python/tests/test_acceptance.py
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Worktree acceptance commit path stabilized with deterministic tracked file.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-11-skills-ux-codex`.
+
+## Entry 012 (phase-11 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-11
+- status: done
+- implemented_changes:
+  - Added user-flow skill wrappers (`csk-new/run/approve/replay/update`) and synced onboarding/docs flow contracts.
+- artifacts_paths:
+  - engine/python/csk_next/assets/engine_pack/skills_src/{csk-new,csk-run,csk-approve,csk-replay,csk-update}/SKILL.md
+  - engine/python/tests/test_unit.py
+  - docs/NEW_PROJECT_ONBOARDING.md
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Продолжить `phase-12-update-engine-report-v2`.
+
+## Entry 013 (phase-12 done)
+- timestamp_utc: 2026-02-26T17:15:13Z
+- phase_id: phase-12
+- status: done
+- implemented_changes:
+  - Implemented manager report v2 and user-facing `csk report manager`.
+  - Extended update-engine output with backup/validate metadata for rollback-safe observability.
+- artifacts_paths:
+  - engine/python/csk_next/runtime/reporting.py
+  - engine/python/csk_next/cli/{parser.py,main.py,handlers.py}
+  - engine/python/csk_next/update/engine.py
+  - engine/python/tests/test_unit.py
+  - docs/{CONTRACT.md,README.md,ops_runbook.md,NEW_PROJECT_ONBOARDING.md}
+- commands_executed:
+  - ./csk status --json
+  - PYTHONPATH=engine/python python -m unittest discover -s engine/python/tests -v
+  - ./csk validate --all --strict --skills
+  - ./csk replay --check
+  - ./csk doctor run --git-boundary
+- gate_results:
+  - validate: ok
+  - replay: ok
+  - doctor_git_boundary: ok
+- incidents_or_risks:
+  - Blocking risks отсутствуют.
+- next_recovery_or_next_phase:
+  - Remediation track `phase-00..phase-12` complete.

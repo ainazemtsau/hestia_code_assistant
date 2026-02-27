@@ -42,6 +42,8 @@ def validate_ready(
     verify_ok = True
     review_ok = True
     e2e_ok = True
+    changed_files: list[str] = []
+    verify_commands: list[str] = []
 
     for slice_entry in all_slices:
         slice_id = slice_entry["slice_id"]
@@ -54,12 +56,23 @@ def validate_ready(
 
         if "scope" in required_gates:
             scope_ok = scope_ok and bool(scope and scope.get("passed"))
+            if isinstance(scope, dict):
+                for path in scope.get("changed_files", []):
+                    if isinstance(path, str):
+                        changed_files.append(path)
         if "verify" in required_gates:
             verify_ok = verify_ok and bool(
                 verify
                 and verify.get("passed")
                 and int(verify.get("executed_count", len(verify.get("commands", [])))) > 0
             )
+            if isinstance(verify, dict):
+                for command_row in verify.get("commands", []):
+                    if not isinstance(command_row, dict):
+                        continue
+                    argv = command_row.get("argv", [])
+                    if isinstance(argv, list) and all(isinstance(item, str) for item in argv):
+                        verify_commands.append(" ".join(argv))
         if "review" in required_gates:
             review_ok = review_ok and bool(
                 review and review.get("passed") and review.get("p0") == 0 and review.get("p1") == 0
@@ -91,10 +104,15 @@ def validate_ready(
     validate_schema("ready_proof", proof)
     write_proof(task_run_dir, "ready", proof)
 
+    changed_dedup = sorted(set(changed_files))
+    verify_dedup = sorted(set(verify_commands))
+
     handoff = {
         "task_id": task_id,
         "summary": "READY handoff generated",
         "proof_references": {"ready": str(task_run_dir / "proofs" / "ready.json")},
+        "changed_files": changed_dedup,
+        "verify_commands": verify_dedup,
         "manual_smoke_steps": [
             "Open changed module and run local app/tests.",
             "Validate primary user flow from task plan.",
@@ -113,8 +131,22 @@ def validate_ready(
         "## Proof references",
         f"- ready: {handoff['proof_references']['ready']}",
         "",
-        "## Manual smoke steps",
+        "## Changed files",
     ]
+    handoff_text.extend([f"- {path}" for path in changed_dedup] or ["- none"])
+    handoff_text.extend(
+        [
+            "",
+            "## Verify commands",
+        ]
+    )
+    handoff_text.extend([f"- {command}" for command in verify_dedup] or ["- none"])
+    handoff_text.extend(
+        [
+            "",
+            "## Manual smoke steps",
+        ]
+    )
     handoff_text.extend([f"- {step}" for step in handoff["manual_smoke_steps"]])
     handoff_text.append("")
     handoff_text.append(f"Generated at: {handoff['generated_at']}")

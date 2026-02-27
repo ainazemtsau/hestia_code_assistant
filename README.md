@@ -18,7 +18,7 @@ PYTHONPATH=engine/python python -m csk_next.cli.main --root /path/to/product --s
 PYTHONPATH=engine/python python -m csk_next.cli.main --root /path/to/product --state-root /path/to/control/state run
 ```
 
-Primary user flow commands are `csk`, `csk new`, `csk run`, `csk approve`, `csk module <id>`, `csk retro`, and `csk replay --check`.
+Primary user flow commands are `csk`, `csk new`, `csk run`, `csk approve`, `csk module <id>`, `csk retro`, `csk replay --check`, and `csk report manager`.
 Low-level commands remain available as backend APIs for skills and automation.
 `--state-root` can also be provided via `CSK_STATE_ROOT`.
 Interactive `csk`/`csk module <id>` render `SUMMARY/STATUS/NEXT`; machine mode remains JSON (`csk status --json`).
@@ -90,10 +90,11 @@ Blocking invariants:
 - Mission/module:
   - `status` (or no command arguments)
   - `module <id>` (alias for `module status --module-id <id>`)
-  - `module list|show|add|init|status`
+  - `module list|show|add|init|status|worktree create`
   - `mission new|status|spawn-milestone`
 - Operations:
   - `replay --check`
+  - `report manager`
   - `completion bash|zsh|fish`
   - `skills generate`
   - `context build`

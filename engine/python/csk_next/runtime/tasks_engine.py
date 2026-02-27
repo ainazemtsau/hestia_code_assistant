@@ -15,7 +15,8 @@ from csk_next.runtime.ids import next_task_id
 from csk_next.runtime.paths import Layout
 from csk_next.runtime.tasks import (
     calculate_plan_hashes,
-    critic_path,
+    critic_report_path,
+    resolve_critic_report_path,
     ensure_task_dirs,
     freeze_path,
     plan_approval_path,
@@ -150,7 +151,8 @@ def task_record_critic(
         "passed": p0 == 0 and p1 == 0,
         "reviewed_at": utc_now_iso(),
     }
-    write_json(critic_path(layout, module_path, task_id), payload)
+    validate_schema("critic_report", payload)
+    write_json(critic_report_path(layout, module_path, task_id), payload)
 
     append_event(
         layout=layout,
@@ -159,7 +161,7 @@ def task_record_critic(
         module_id=state_module_id(layout, module_path),
         task_id=task_id,
         payload=payload,
-        artifact_refs=[str(critic_path(layout, module_path, task_id))],
+        artifact_refs=[str(critic_report_path(layout, module_path, task_id))],
     )
 
     if payload["passed"]:
@@ -168,8 +170,13 @@ def task_record_critic(
     return {"status": "ok", "critic": payload}
 
 
+def _resolve_critic_report(layout: Layout, module_path: str, task_id: str) -> Path:
+    """Load critic report path with legacy fallback support."""
+    return resolve_critic_report_path(layout, module_path, task_id, migrate=True)
+
+
 def task_freeze(*, layout: Layout, module_path: str, task_id: str) -> dict[str, Any]:
-    critic_file = critic_path(layout, module_path, task_id)
+    critic_file = _resolve_critic_report(layout, module_path, task_id)
     if not critic_file.exists():
         raise ValueError("Cannot freeze without critic review")
 
@@ -207,6 +214,13 @@ def task_approve_plan(
     task_id: str,
     approved_by: str,
 ) -> dict[str, Any]:
+    critic_file = _resolve_critic_report(layout, module_path, task_id)
+    if not critic_file.exists():
+        raise ValueError("Cannot approve plan without critic report")
+    critic = read_json(critic_file)
+    if critic.get("p0", 1) > 0 or critic.get("p1", 1) > 0:
+        raise ValueError("Cannot approve plan with critic P0/P1 findings")
+
     freeze_file = freeze_path(layout, module_path, task_id)
     if not freeze_file.exists():
         raise ValueError("Cannot approve plan without freeze")

@@ -3,7 +3,7 @@
 ## Metadata
 - phase_id: phase-09
 - title: Replay hardening: расширенные инварианты
-- status: planned
+- status: done
 - owner: codex
 
 ## Goal

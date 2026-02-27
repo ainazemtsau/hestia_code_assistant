@@ -44,8 +44,35 @@ def ready_approval_path(layout: Layout, module_path: str, task_id: str) -> Path:
     return task_dir(layout, module_path, task_id) / "approvals" / "ready.json"
 
 
-def critic_path(layout: Layout, module_path: str, task_id: str) -> Path:
+def critic_report_path(layout: Layout, module_path: str, task_id: str) -> Path:
+    return task_dir(layout, module_path, task_id) / "critic_report.json"
+
+
+def legacy_critic_report_path(layout: Layout, module_path: str, task_id: str) -> Path:
+    """Backward-compatible artifact path used by older engine versions."""
     return task_dir(layout, module_path, task_id) / "critic.json"
+
+
+def resolve_critic_report_path(
+    layout: Layout,
+    module_path: str,
+    task_id: str,
+    *,
+    migrate: bool = False,
+) -> Path:
+    """Resolve the active critic report path, optionally migrating legacy `critic.json`."""
+    primary = critic_report_path(layout, module_path, task_id)
+    if primary.exists():
+        return primary
+
+    legacy = legacy_critic_report_path(layout, module_path, task_id)
+    if not legacy.exists():
+        return primary
+
+    if migrate:
+        write_json(primary, read_json(legacy))
+        return primary
+    return legacy
 
 
 def ensure_task_dirs(layout: Layout, module_path: str, task_id: str) -> None:
