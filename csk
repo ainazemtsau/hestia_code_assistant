@@ -2,8 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-WORK_ROOT="$(pwd -P)"
-STATE_ROOT="${CSK_STATE_ROOT:-${WORK_ROOT}}"
+SCRIPT_PATH="$(readlink -f "$0")"
+if [ -n "${SCRIPT_PATH}" ]; then
+  SCRIPT_DIR="$(cd -- "$(dirname -- "${SCRIPT_PATH}")" && pwd)"
+fi
+REPO_ROOT="$(pwd -P)"
+STATE_ROOT="${CSK_STATE_ROOT:-${REPO_ROOT}}"
 
 export PYTHONPATH="${SCRIPT_DIR}/engine/python${PYTHONPATH:+:${PYTHONPATH}}"
-exec python -m csk_next.cli.main --root "${WORK_ROOT}" --state-root "${STATE_ROOT}" "$@"
+exec python -m csk_next.cli.main --root "${REPO_ROOT}" --state-root "${STATE_ROOT}" "$@"

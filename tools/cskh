@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(pwd -P)"
 STATE_ROOT="${CSK_STATE_ROOT:-$HOME/.csk-state/hestia}"
 
 export PYTHONPATH="${REPO_ROOT}/engine/python${PYTHONPATH:+:${PYTHONPATH}}"
-exec python -m csk_next.cli.main --root "${REPO_ROOT}" --state-root "${STATE_ROOT}" "$@"
+exec python -m csk_next.cli.main --root "${PROJECT_ROOT}" --state-root "${STATE_ROOT}" "$@"

@@ -47,6 +47,17 @@ python -m pip install -e ".[dev]"
 - `skills.status: ok`
 - рекомендация `next.recommended` обычно `csk run`
 
+## 4.1 Если проект отдельный от репозитория `hestia_code_assistant`
+
+Если код продукта не находится в каталоге `hestia_code_assistant`, сделай:
+
+```bash
+ln -sf /path/to/hestia_code_assistant/csk ./csk
+./csk bootstrap
+```
+
+`./csk` берет `--root` из текущей папки (`PWD`), поэтому `.csk/` и `.agents/` создаются в вашем проекте, а не в `hestia_code_assistant`.
+
 ## 5. Создать первую рабочую задачу
 
 ```bash
