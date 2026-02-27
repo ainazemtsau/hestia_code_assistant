@@ -7,15 +7,23 @@ description: Codex-first root router for CSK-Next that inspects status and propo
 
 Codex-first root router for CSK-Next.
 
+## Launcher
+
+Use the first available command in this order:
+- `csk`
+- `./csk`
+- `./hestia_code_assistant/csk`
+- `python ./hestia_code_assistant/tools/csk.py`
+
 ## Purpose
 - Accept user intent in plain language.
 - Inspect current state and choose one safe user-facing command.
 - Return concise status and one actionable `NEXT`.
 
 ## Deterministic procedure
-1. Read `csk status --json`.
-2. If `summary.bootstrapped=false` -> run `csk bootstrap`, then read `csk status --json` again.
-3. If `skills.status=failed` -> run `csk skills generate`, then read `csk status --json` again.
+1. Run status via the launcher: `<launcher> status --json`.
+2. If `summary.bootstrapped=false` -> run `<launcher> bootstrap`, then `<launcher> status --json` again.
+3. If `skills.status=failed` -> run `<launcher> skills generate`, then `<launcher> status --json` again.
 4. If any module is `PLAN_FROZEN` with `active_task_id` -> suggest `csk approve --module-id <module_id_from_status> --task-id <active_task_id_from_status> --approved-by <human>`.
 5. If any module is `EXECUTING` -> suggest `csk run`.
 6. If any module is `READY_VALIDATED` with `active_task_id` -> suggest `csk approve --module-id <module_id_from_status> --task-id <active_task_id_from_status> --approved-by <human>`.
