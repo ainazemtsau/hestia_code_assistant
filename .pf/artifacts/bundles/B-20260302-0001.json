@@ -1,0 +1,79 @@
+{
+  "budget_bytes": 4000,
+  "bundle_id": "B-20260302-0001",
+  "intent": "execute",
+  "provenance": [
+    {
+      "section": "documents",
+      "source": "filesystem:.pf/modules/..."
+    },
+    {
+      "section": "events",
+      "source": "db:events(scope=module:app, last=20)"
+    },
+    {
+      "section": "pkm",
+      "source": "db:pkm_items(stale=0, confidence desc)"
+    },
+    {
+      "section": "freshness",
+      "source": "db:docs_index + fingerprint check"
+    },
+    {
+      "section": "code_snippets",
+      "source": "rg within app"
+    }
+  ],
+  "scope": {
+    "id": "app",
+    "type": "module"
+  },
+  "selected": {
+    "code_snippets": [],
+    "documents": [
+      {
+        "bytes": 500,
+        "kind": "plan",
+        "path": ".pf/modules/app/PLAN.md",
+        "sha256": "c23d9578dc1426c08314696c6d6b2d0394074378e6b98862db4beb9d0ea4094e"
+      },
+      {
+        "bytes": 213,
+        "kind": "knowledge",
+        "path": ".pf/modules/app/KNOWLEDGE.md",
+        "sha256": "9ea4a4074d1642fe82c19c5647512973cfd0d47c2b8019727c68b264de0071b3"
+      },
+      {
+        "bytes": 175,
+        "kind": "decisions",
+        "path": ".pf/modules/app/DECISIONS.md",
+        "sha256": "1b5abc474c820baaec9ab34cb6e85222c9f235fe65e74e3fa24c4af84f914bc8"
+      }
+    ],
+    "events": [
+      {
+        "event_id": 4,
+        "summary": "focus module changed to app",
+        "ts": "2026-03-02T11:14:30Z",
+        "type": "focus.changed"
+      },
+      {
+        "event_id": 3,
+        "summary": "module initialized: app",
+        "ts": "2026-03-02T11:14:30Z",
+        "type": "module.initialized"
+      },
+      {
+        "event_id": 2,
+        "summary": "module upserted: app",
+        "ts": "2026-03-02T11:14:30Z",
+        "type": "module.upserted"
+      }
+    ],
+    "freshness": {
+      "stale_docs": []
+    },
+    "pkm": []
+  },
+  "ts": "2026-03-02T11:14:41Z"
+}

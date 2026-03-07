@@ -1,0 +1,10 @@
+# Decisions (module: <module_id>)
+
+Append-only log of important decisions.
+
+## <YYYY-MM-DD> <decision title>
+- Decision:
+- Why:
+- Alternatives considered:
+- Consequences:
+- Evidence:

@@ -1,0 +1,16 @@
+# Task <task_id>
+
+## Title
+...
+
+## Module
+- module_id: ...
+- root_path: ...
+
+## Acceptance criteria
+- [ ] ...
+- [ ] ...
+
+## Constraints
+- Work only within module boundaries unless user approves otherwise.
+- Prefer minimal changes.

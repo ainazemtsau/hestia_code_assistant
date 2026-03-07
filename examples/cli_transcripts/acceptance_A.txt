@@ -1,0 +1,25 @@
+$ ./pf init
+PowerFlow init: OK
+...
+
+$ ./pf status
+PowerFlow status: OK
+NEXT (Codex): $pf-intake
+
+$ ./pf module upsert --module-id app --root-path app --display-name "App"
+MODULE OK: app (app)
+
+$ ./pf module init --module-id app --write-scaffold
+MODULE INIT OK: app
+
+$ ./pf task create --module-id app --title "Add /health endpoint"
+TASK OK: T-...
+
+$ ./pf plan mark-saved --module-id app
+PLAN SAVED: module=app
+
+$ ./pf plan approve --module-id app --note "approved"
+PLAN APPROVED: module=app
+
+$ ./pf context build --intent execute --module app --budget 4000
+CONTEXT OK: B-...

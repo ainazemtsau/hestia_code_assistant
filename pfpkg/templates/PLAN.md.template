@@ -1,0 +1,42 @@
+# Plan (module: <module_id>)
+
+## Goal
+...
+
+## Questions (if any)
+- ...
+
+## Options
+### Option A
+- Approach:
+- Pros:
+- Cons:
+- Risks:
+
+### Option B
+...
+
+### Option C
+...
+
+## Recommendation
+- Choose: Option ...
+- Why:
+- Tradeoffs:
+
+## Scope / Non-scope
+- Scope:
+- Non-scope:
+
+## Verification plan
+> Do not invent commands. Prefer proven commands from KNOWLEDGE.md or repo docs.
+- Command(s):
+- Expected result:
+
+## Slices (atomic steps)
+1) Slice 1:
+   - files/paths:
+   - changes:
+   - verify:
+2) Slice 2:
+...

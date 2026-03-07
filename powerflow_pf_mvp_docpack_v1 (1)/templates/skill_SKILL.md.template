@@ -1,0 +1,23 @@
+---
+name: <skill-name>
+description: <one-line description used for discovery>
+---
+
+# Purpose
+<what this skill does>
+
+# Mandatory tool calls
+Before doing anything:
+1) Run: `pf status --json`
+2) Run: `pf context build --intent <intent> ...`
+
+# Process
+- Step 1: ...
+- Step 2: ...
+
+# Output format
+- ...
+
+# Constraints
+- NO-SCRIPTS: do not create orchestration scripts
+- Respect module boundaries (only within module root)

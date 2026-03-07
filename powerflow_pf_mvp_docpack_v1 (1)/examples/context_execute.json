@@ -1,0 +1,43 @@
+{
+  "bundle_id": "B-20260301-0001",
+  "ts": "2026-03-01T12:00:00Z",
+  "intent": "execute",
+  "scope": {
+    "type": "module",
+    "id": "app"
+  },
+  "budget_bytes": 4000,
+  "selected": {
+    "documents": [
+      {
+        "kind": "plan",
+        "path": ".pf/modules/app/PLAN.md",
+        "sha256": "\u2026",
+        "bytes": 1200
+      }
+    ],
+    "pkm": [],
+    "events": [
+      {
+        "event_id": 10,
+        "ts": "2026-03-01T11:58:00Z",
+        "type": "plan.approved",
+        "summary": "plan approved"
+      }
+    ],
+    "code_snippets": [],
+    "freshness": {
+      "stale_docs": []
+    }
+  },
+  "provenance": [
+    {
+      "section": "documents.plan",
+      "source": "file:.pf/modules/app/PLAN.md"
+    },
+    {
+      "section": "events",
+      "source": "db:events(scope=module:app,last=20)"
+    }
+  ]
+}

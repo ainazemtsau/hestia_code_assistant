@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pf context bundle v1",
+  "type": "object",
+  "properties": {
+    "bundle_id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string"
+    },
+    "intent": {
+      "enum": [
+        "plan",
+        "execute",
+        "review",
+        "retro",
+        "status"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "root",
+            "module"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ]
+    },
+    "budget_bytes": {
+      "type": "integer"
+    },
+    "selected": {
+      "type": "object"
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "bundle_id",
+    "ts",
+    "intent",
+    "scope",
+    "budget_bytes",
+    "selected",
+    "provenance"
+  ]
+}

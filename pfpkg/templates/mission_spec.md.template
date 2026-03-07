@@ -1,0 +1,26 @@
+# Mission <mission_id>
+
+## Title
+<короткий заголовок>
+
+## Original request (verbatim)
+<вставить текст пользователя>
+
+## Success criteria (manager-friendly)
+- [ ] ...
+- [ ] ...
+
+## Constraints / assumptions
+- ...
+
+## Milestones
+### Milestone 1 (detailed)
+- Modules involved: ...
+- Deliverables: ...
+- Verification: ...
+
+### Milestone 2+ (high-level)
+- ...
+
+## Notes
+- ...
