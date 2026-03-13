@@ -1,31 +1,27 @@
-# AGENTS.md — hestia_code_assistant (CSK‑M Pro v4 root)
+# AGENTS.md — hestia_code_assistant workflow development repo
 
-This repo (hestia_code_assistant) uses CSK‑M Pro: Codex‑first, модульный workflow для долгоживущей автономной разработки.
+This repository is the development/factory repo for CSK-M Pro. It is not a client project with the workflow already installed.
 
 Prime directives (hard)
-- **Module-scoped work**: operate inside one module directory at a time.
-- **No coding for non-trivial work until Plan Freeze + Plan Approval**.
-- **No command guessing**: only run commands from toolchain contracts.
-  - If a required gate command is missing or fails: log an incident and run Doctor.
-- **READY is forbidden** unless Proof Pack is valid (verify + review + optional e2e + scope) and approvals exist.
+- **Keep the product boundary explicit**: source repo, installable base, and client-owned customization layer must stay separate.
+- **Do not treat repo-root files here as the exact files that will appear in client projects** unless they are intentionally placed in the installable asset set.
+- **Thin bootstrap only**: client `AGENTS.md` must stay small and point Codex to deeper guides/skills instead of embedding the whole workflow.
+- **Scripts are helpers**: use scripts only when they materially simplify repetitive file placement or managed-block updates. Instructions remain primary.
+- **No command guessing**: if a scripted helper is needed, add it deliberately and document it.
 
-Definitions
-- Module = largest unit of durable context and ownership.
-- Cross-module changes MUST be decomposed into:
-  1) API-slice in the owner module
-  2) consumer-slices in consuming modules
-  3) optional integration slice (app layer)
-
-State model (important)
-- **Durable knowledge (commit-friendly)**: plans, freezes, decisions, incidents, public APIs.
-- **Runtime state (worktree-local, not committed)**: proofs, active slice, attempt counters.
-  - Runtime lives under `*/.csk/**/run/` and is gitignored.
+Maintenance rules
+- Any change to install, init, adopt, update, or bootstrap behavior must update the related client-facing instructions and skills in the same change.
+- Any change to managed-vs-project-owned boundaries must update the install manifest and ownership documentation.
+- Do not design updates that overwrite project-owned customizations.
 
 Where to look
-- App orchestration: `.csk-app/`
-- Module kernel: `<module>/.csk/`
+- Factory/source architecture: `docs/INSTALLATION_ARCHITECTURE.md`
+- Client installed shape: `docs/CLIENT_WORKFLOW_LAYOUT.md`
+- Client bootstrap model: `docs/CLIENT_BOOTSTRAP_MODEL.md`
+- Installable assets: `install/`
 
 Safety
-- Prefer `sandbox_mode = "workspace-write"`.
+- Prefer conservative changes to client-facing behavior.
 - Avoid destructive commands.
-- Keep rules allowlist conservative (see `tools/csk/rules/csk.rules`).
+- Keep install/update helpers narrow and reviewable.
+- For source-repo work, start from the factory docs and local source-repo skills in this checkout, not the installed-client entrypoint.

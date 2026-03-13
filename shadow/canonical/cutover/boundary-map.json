@@ -1,0 +1,276 @@
+{
+  "version": 1,
+  "description": "Exact path-level ownership and future cutover mapping for the workflow redesign.",
+  "entries": [
+    {
+      "path": "install/",
+      "current_class": "installed-client-surface",
+      "future_class": "installed-client-surface",
+      "source_of_truth": "shadow/canonical/client-package/install/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 7",
+      "notes": "Live install tree remains compatibility-only until replaced from canonical client-package."
+    },
+    {
+      "path": "tools/csk/install_lib.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/delivery/tools/csk/install_lib.py",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Live delivery helper remains usable, but canonical delivery owns future changes."
+    },
+    {
+      "path": "tools/csk/install_client_workflow.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/delivery/tools/csk/install_client_workflow.py",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Live install CLI remains compatibility-only until cutover."
+    },
+    {
+      "path": "tools/csk/update_client_workflow.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/delivery/tools/csk/update_client_workflow.py",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Live update CLI remains compatibility-only until cutover."
+    },
+    {
+      "path": "tests/test_bootstrap_contract.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_client_install_flow.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_client_install_manifest.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_client_install_update_e2e.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_client_update_preserves_customizations.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_install_lib.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_source_repo_agents.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "replace-from-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical tests will eventually replace this live compatibility gate."
+    },
+    {
+      "path": "tests/test_stage0_workflow_audit.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "tests/test_stage0_workflow_audit.py",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Stage 0 audit acceptance remains a live control-plane test."
+    },
+    {
+      "path": "tests/test_stage05_source_installed_shadow_architecture.py",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "tests/test_stage05_source_installed_shadow_architecture.py",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Stage 0.5 architecture acceptance remains a live control-plane test."
+    },
+    {
+      "path": "shadow/phase1-clean/",
+      "current_class": "legacy-reference",
+      "future_class": "legacy-reference",
+      "source_of_truth": "shadow/phase1-clean/",
+      "cutover_action": "delete-at-cutover",
+      "owner_stage": "Stage 9",
+      "notes": "Legacy rewrite attempt kept only for reference until final deletion."
+    },
+    {
+      "path": "shadow/canonical/runtime/",
+      "current_class": "canonical-active",
+      "future_class": "canonical-active",
+      "source_of_truth": "shadow/canonical/runtime/",
+      "cutover_action": "keep-canonical",
+      "owner_stage": "Stage 1",
+      "notes": "Canonical runtime redesign workspace."
+    },
+    {
+      "path": "shadow/canonical/client-package/",
+      "current_class": "canonical-active",
+      "future_class": "canonical-active",
+      "source_of_truth": "shadow/canonical/client-package/",
+      "cutover_action": "keep-canonical",
+      "owner_stage": "Stage 7",
+      "notes": "Canonical installed package redesign workspace."
+    },
+    {
+      "path": "shadow/canonical/delivery/",
+      "current_class": "canonical-active",
+      "future_class": "canonical-active",
+      "source_of_truth": "shadow/canonical/delivery/",
+      "cutover_action": "keep-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical thin delivery redesign workspace."
+    },
+    {
+      "path": "shadow/canonical/tests/",
+      "current_class": "canonical-active",
+      "future_class": "canonical-active",
+      "source_of_truth": "shadow/canonical/tests/",
+      "cutover_action": "keep-canonical",
+      "owner_stage": "Stage 8",
+      "notes": "Canonical redesign/package/delivery test workspace."
+    },
+    {
+      "path": "shadow/canonical/cutover/",
+      "current_class": "canonical-active",
+      "future_class": "canonical-active",
+      "source_of_truth": "shadow/canonical/cutover/",
+      "cutover_action": "keep-canonical",
+      "owner_stage": "Stage 9",
+      "notes": "Canonical cutover metadata workspace."
+    },
+    {
+      "path": ".csk-app/digest.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": ".csk-app/digest.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Active repo status surface that must reflect canonical-only redesign policy."
+    },
+    {
+      "path": "shadow/README.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "shadow/README.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Active workspace guidance surface."
+    },
+    {
+      "path": "docs/plans/2026-03-13-stage-0-global-workflow-audit.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/plans/2026-03-13-stage-0-global-workflow-audit.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Stage 0 audit remains a live control-plane reference."
+    },
+    {
+      "path": "docs/plans/2026-03-13-stage-0-workflow-inventory.json",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/plans/2026-03-13-stage-0-workflow-inventory.json",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Stage 0 inventory remains a live control-plane reference."
+    },
+    {
+      "path": "docs/plans/2026-03-13-stage-0-5-source-installed-shadow-architecture.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/plans/2026-03-13-stage-0-5-source-installed-shadow-architecture.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Stage 0.5 architecture spec remains a live control-plane reference."
+    },
+    {
+      "path": "docs/plans/2026-03-13-workflow-redesign-master-roadmap.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/plans/2026-03-13-workflow-redesign-master-roadmap.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 0.5",
+      "notes": "Master roadmap remains the live redesign control-plane document."
+    },
+    {
+      "path": "docs/CLIENT_BOOTSTRAP_MODEL.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/CLIENT_BOOTSTRAP_MODEL.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 7",
+      "notes": "Live documentation for bootstrap model remains usable until canonical package docs supersede it."
+    },
+    {
+      "path": "docs/CLIENT_WORKFLOW_LAYOUT.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/CLIENT_WORKFLOW_LAYOUT.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 7",
+      "notes": "Live documentation for client layout remains usable until canonical package docs supersede it."
+    },
+    {
+      "path": "docs/CLIENT_INSTALL.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/CLIENT_INSTALL.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 8",
+      "notes": "Live install guidance remains usable until canonical delivery docs supersede it."
+    },
+    {
+      "path": "docs/CLIENT_UPDATE.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/CLIENT_UPDATE.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 8",
+      "notes": "Live update guidance remains usable until canonical delivery docs supersede it."
+    },
+    {
+      "path": "docs/INSTALLATION_ARCHITECTURE.md",
+      "current_class": "live-compatibility",
+      "future_class": "live-compatibility",
+      "source_of_truth": "docs/INSTALLATION_ARCHITECTURE.md",
+      "cutover_action": "keep-live",
+      "owner_stage": "Stage 8",
+      "notes": "Live installation architecture doc remains usable until canonical delivery docs supersede it."
+    }
+  ]
+}

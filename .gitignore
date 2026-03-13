@@ -3,6 +3,12 @@
 **/.csk/**/run/
 **/.csk/**/proofs/
 .codex-log/
+.codex-tmp/
+.test-tmp/
+tmp*/
+**/__pycache__/
+*.pyc
 # CSK sync runtime artifacts
 .csk-app/backups/
 .csk-app/reports/
+.csk-app/tmp/
