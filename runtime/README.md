@@ -11,3 +11,7 @@ Stage ownership:
 - `Stage 6` - retro and learning
 
 Nothing here should depend on deleted legacy helpers.
+
+Canonical Stage 2 subtree:
+
+- `runtime/planning/`

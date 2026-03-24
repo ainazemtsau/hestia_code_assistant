@@ -12,8 +12,7 @@ Current source of truth:
 - Execution roadmap: `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`
 - Current active stage: `docs/plans/2026-03-24-stage-2-planning-studio.md`
 - Autonomous execution protocol: `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
-- Current active stage packet: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-packet.md`
-- Latest completed stage report: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-report.md`
+- Latest completed stage report: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-report.md`
 
 Canonical implementation surfaces in repo root:
 - `runtime/`
