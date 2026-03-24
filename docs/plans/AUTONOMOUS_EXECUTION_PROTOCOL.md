@@ -23,7 +23,6 @@ This protocol applies to all canonical redesign work in repo-root surfaces:
 - `runtime/`
 - `client-package/`
 - `delivery/`
-- `tests/`
 - `cutover/`
 
 It does not grant permission to skip the product contract in `docs/csk_vnext_final_spec_ru.md` or the execution order in `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`.
@@ -64,9 +63,10 @@ Allowed inside-stage behavior:
 
 - refine document structure
 - resolve local inconsistencies
-- add or update stage-local tests
 - make minimal supporting doc updates needed to keep the stage self-consistent
 - choose between equivalent implementations that do not change the product contract
+
+The current docs-first redesign does not maintain a test surface. Verification is done through stage gates, artifact review, and direct doc consistency checks.
 
 ### 3. Run Required Gates
 

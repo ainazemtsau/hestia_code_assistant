@@ -18,7 +18,6 @@ Canonical implementation surfaces in repo root:
 - `runtime/`
 - `client-package/`
 - `delivery/`
-- `tests/`
 - `cutover/`
 
 Hard rules:
@@ -27,6 +26,7 @@ Hard rules:
 - One active stage at a time.
 - Do not start a stage without a stage packet.
 - Do not consider a stage finished without a stage report.
+- Do not create or maintain automated tests in this docs-first redesign repo unless a future stage explicitly reintroduces them.
 - Do not recreate deleted legacy surfaces (`tools/csk/`, `install/`, `.agents/skills/`, `.csk-app/`) unless a stage explicitly reintroduces them.
 - Keep the product boundary explicit: runtime, client package, and delivery are separate layers.
 - Do not reintroduce Python orchestration as workflow core.

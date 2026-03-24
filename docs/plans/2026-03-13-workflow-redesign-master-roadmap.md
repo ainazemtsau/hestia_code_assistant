@@ -10,7 +10,6 @@ The active implementation target is the repo root canonical layout:
 - `runtime/`
 - `client-package/`
 - `delivery/`
-- `tests/`
 - `cutover/`
 
 Legacy implementation surfaces were intentionally removed. New work should not rebuild them ad hoc; it should be introduced stage-by-stage from the final spec.
@@ -97,3 +96,4 @@ The detailed Stage 0 / Stage 0.5 artifacts were intentionally removed during the
 - Set the next active focus to `Stage 1`, beginning with root/module entry and routing design in `runtime/`.
 - Added a docs-first autonomous execution framework: protocol, packet template, report template, and the first concrete packet for `Stage 1A - Root / Module UX Contract`.
 - Completed `Stage 1A - Root / Module UX Contract` and recorded a mandatory stage report; Stage 1 remains open until the next Stage 1 packet is defined.
+- Removed the test layer from the active redesign workspace; current verification is stage-gate and docs-consistency based, not test-driven.

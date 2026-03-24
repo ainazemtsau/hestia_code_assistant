@@ -25,11 +25,11 @@ This repository now includes a working `pf` CLI implementation (stdlib-only, SQL
 - `./pf replay --check`
 - `./pf report manager`
 
-## Tests
+## Verification
 
-```bash
-python -m unittest
-```
+This repository does not currently maintain an automated test layer.
+
+Verification is done through direct CLI checks, stage-gate review, and docs consistency during implementation.
 
 ## Notes
 
