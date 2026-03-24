@@ -95,23 +95,23 @@ Stage 2 is done when:
 
 ## Current Execution Posture
 
-Stage 2 is in progress.
+Stage 2 is closed.
 
-Active execution packet:
-
-- `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-packet.md`
+There is no active execution packet.
 
 Latest completed execution unit:
 
-- `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-packet.md`
+- `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-packet.md`
 
-Do not jump into critic-gate or execution design while Stage 2 is still being defined.
+Do not reopen Stage 2 ad hoc while packetizing later stages. Critic-gate and execution behavior belong to later stages and must build on these closed Stage 2 outputs.
 
 Current Stage 2 execution chain:
 
 - `Stage 2A - Planning Posture And Artifact Contract`: passed
 - report: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-report.md`
+- `Stage 2B - Coverage Sweep And Freeze Rules`: passed
+- report: `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-report.md`
 
 Next required action:
 
-- execute `Stage 2B - Coverage Sweep And Freeze Rules` and stop at the end of that execution unit
+- packetize `Stage 3 - Hard Plan Review` before implementation continues

@@ -4,7 +4,7 @@
 
 This document defines the minimum required planning artifacts for CSK vNext and the role each artifact plays in the planning layer.
 
-It does not yet define full completeness sweep or freeze criteria. It defines the artifacts that later stages will rely on.
+Completeness sweep and freeze criteria are defined separately in `COVERAGE_SWEEP.md` and `FREEZE_RULES.md`. This document stays focused on artifact purpose and ownership.
 
 ## `task.yaml`
 
@@ -58,7 +58,7 @@ Purpose:
 - record planning completeness for the current internal module or leaf
 - make explicit what was covered, not applicable, deferred, or accepted as risk
 
-At Stage 2A, this is the minimum contract only. Full sweep rules are deferred.
+`coverage.yaml` receives its detailed completeness semantics from `COVERAGE_SWEEP.md`.
 
 ## `leaf-plan.md`
 
@@ -71,7 +71,7 @@ Purpose:
 - state contract delta and invariants
 - state checks, docs delta, risks, acceptance, and next edit sequence
 
-`leaf-plan.md` is the planning artifact closest to execution, but it remains planning until later-stage gates are passed.
+`leaf-plan.md` is the planning artifact closest to execution, but it remains planning until freeze and later-stage pre-execution gates are passed.
 
 ## Decision Cards
 
