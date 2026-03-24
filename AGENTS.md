@@ -1,27 +1,39 @@
-# AGENTS.md — hestia_code_assistant workflow development repo
+# AGENTS.md - hestia_code_assistant redesign repo
 
-This repository is the development/factory repo for CSK-M Pro. It is not a client project with the workflow already installed.
+This repository is the docs-first redesign workspace for CSK vNext.
 
-Prime directives (hard)
-- **Keep the product boundary explicit**: source repo, installable base, and client-owned customization layer must stay separate.
-- **Do not treat repo-root files here as the exact files that will appear in client projects** unless they are intentionally placed in the installable asset set.
-- **Thin bootstrap only**: client `AGENTS.md` must stay small and point Codex to deeper guides/skills instead of embedding the whole workflow.
-- **Scripts are helpers**: use scripts only when they materially simplify repetitive file placement or managed-block updates. Instructions remain primary.
-- **No command guessing**: if a scripted helper is needed, add it deliberately and document it.
+It is not:
+- a client project with CSK already installed
+- a working installed package
+- a legacy helper-script implementation checkout
 
-Maintenance rules
-- Any change to install, init, adopt, update, or bootstrap behavior must update the related client-facing instructions and skills in the same change.
-- Any change to managed-vs-project-owned boundaries must update the install manifest and ownership documentation.
-- Do not design updates that overwrite project-owned customizations.
+Current source of truth:
+- Product contract: `docs/csk_vnext_final_spec_ru.md`
+- Execution roadmap: `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`
+- Current active stage: `docs/plans/2026-03-13-stage-1-entry-routing-root-module-program-model.md`
 
-Where to look
-- Factory/source architecture: `docs/INSTALLATION_ARCHITECTURE.md`
-- Client installed shape: `docs/CLIENT_WORKFLOW_LAYOUT.md`
-- Client bootstrap model: `docs/CLIENT_BOOTSTRAP_MODEL.md`
-- Installable assets: `install/`
+Canonical implementation surfaces in repo root:
+- `runtime/`
+- `client-package/`
+- `delivery/`
+- `tests/`
+- `cutover/`
 
-Safety
-- Prefer conservative changes to client-facing behavior.
-- Avoid destructive commands.
-- Keep install/update helpers narrow and reviewable.
-- For source-repo work, start from the factory docs and local source-repo skills in this checkout, not the installed-client entrypoint.
+Hard rules:
+- Treat the final spec as the product contract unless a later stage explicitly changes it.
+- All new redesign work goes only into the canonical repo-root surfaces listed above.
+- Do not recreate deleted legacy surfaces (`tools/csk/`, `install/`, `.agents/skills/`, `.csk-app/`) unless a stage explicitly reintroduces them.
+- Keep the product boundary explicit: runtime, client package, and delivery are separate layers.
+- Do not reintroduce Python orchestration as workflow core.
+- Keep docs honest: do not reference deleted files as active implementation.
+
+Where to start:
+- `docs/csk_vnext_final_spec_ru.md`
+- `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`
+- `docs/plans/2026-03-13-stage-1-entry-routing-root-module-program-model.md`
+- `runtime/`
+
+Safety:
+- Prefer minimal scaffolding over speculative implementation.
+- If a path does not exist yet, describe it as planned, not active.
+- Keep stage work isolated and stage-driven.

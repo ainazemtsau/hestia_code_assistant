@@ -1,7 +1,0 @@
-{
-  "version": 1,
-  "description": "Exact legacy paths that will be deleted outright at final cutover.",
-  "delete_paths": [
-    "shadow/phase1-clean/"
-  ]
-}
