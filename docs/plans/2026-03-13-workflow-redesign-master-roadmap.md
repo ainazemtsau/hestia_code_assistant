@@ -15,6 +15,21 @@ The active implementation target is the repo root canonical layout:
 
 Legacy implementation surfaces were intentionally removed. New work should not rebuild them ad hoc; it should be introduced stage-by-stage from the final spec.
 
+## Autonomous Execution Framework
+
+Stage execution now runs through explicit docs-first control surfaces:
+
+- protocol: `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
+- reusable packet model: `docs/plans/STAGE_PACKET_TEMPLATE.md`
+- reusable report model: `docs/plans/STAGE_REPORT_TEMPLATE.md`
+
+No stage may start without a packet, and no stage may finish without a report.
+
+Current active execution unit:
+
+- `Stage 1A - Root / Module UX Contract`
+- packet: `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-packet.md`
+
 ## Stage Order
 
 - `Stage 0` - Global Workflow Audit
@@ -44,7 +59,7 @@ Legacy implementation surfaces were intentionally removed. New work should not r
 
 - `Stage 0`: closed
 - `Stage 0.5`: closed
-- `Stage 1`: auditing
+- `Stage 1`: packet-ready (`Stage 1A - Root / Module UX Contract`)
 - `Stage 2`: backlog
 - `Stage 3`: backlog
 - `Stage 4`: backlog
@@ -79,3 +94,4 @@ The detailed Stage 0 / Stage 0.5 artifacts were intentionally removed during the
 - Kept the final CSK vNext spec, the master roadmap, and the active Stage 1 plan as the surviving planning surfaces.
 - Restarted implementation from an empty repo-root canonical layout.
 - Set the next active focus to `Stage 1`, beginning with root/module entry and routing design in `runtime/`.
+- Added a docs-first autonomous execution framework: protocol, packet template, report template, and the first concrete packet for `Stage 1A - Root / Module UX Contract`.

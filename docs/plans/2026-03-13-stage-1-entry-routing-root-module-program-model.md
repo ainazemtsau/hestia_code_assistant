@@ -17,6 +17,8 @@ It does not yet implement deep planning, hard plan review, execution, READY, or 
 
 - `docs/csk_vnext_final_spec_ru.md`
 - `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`
+- `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
+- `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-packet.md`
 
 ## Decisions Already Locked
 
@@ -84,7 +86,18 @@ Stage 1 is done when:
 The repository is still in design-first mode.
 
 Current practical objective:
+- execute `Stage 1A - Root / Module UX Contract` through the autonomous stage framework
 - create canonical runtime docs first
 - only then introduce runtime implementation artifacts
+
+Stage 1 execution must follow:
+
+- `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
+- `docs/plans/STAGE_PACKET_TEMPLATE.md`
+- `docs/plans/STAGE_REPORT_TEMPLATE.md`
+
+The first concrete execution packet is:
+
+- `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-packet.md`
 
 Do not rebuild legacy `tools/csk`, `install`, or `.agents/skills` as a shortcut for Stage 1.
