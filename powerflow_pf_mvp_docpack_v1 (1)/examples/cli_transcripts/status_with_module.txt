@@ -1,0 +1,21 @@
+$ ./pf module upsert --module-id app --root-path app --display-name "App"
+MODULE OK: app (app)
+
+$ ./pf module init --module-id app --write-scaffold
+MODULE INIT OK: app
+
+$ ./pf focus module app
+FOCUS OK: module=app
+
+$ ./pf status
+PowerFlow status: OK
+Init: yes
+Active mission: none
+Focus module: app
+Modules: 2 (root, app)
+
+Plan: missing
+Docs stale: 0
+
+NEXT (Codex): $pf-planner
+WHY: create an executable plan for this module

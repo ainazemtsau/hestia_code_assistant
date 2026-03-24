@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "slices": [
+    {
+      "slice_id": "S-YYYYMMDD-0001",
+      "title": "Example slice",
+      "allowed_paths": [
+        "<module_root>/"
+      ],
+      "verify": [
+        "<command or reference>"
+      ]
+    }
+  ]
+}

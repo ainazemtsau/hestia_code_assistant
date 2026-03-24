@@ -1,0 +1,16 @@
+$ ./pf mission create --title "Stripe + Apple Pay MVP"
+MISSION OK: M-...
+
+$ ./pf module upsert --module-id payments-core --root-path services/payments-core --display-name "Payments Core"
+MODULE OK: payments-core (services/payments-core)
+
+$ ./pf module upsert --module-id web-checkout --root-path apps/web-checkout --display-name "Web Checkout"
+MODULE OK: web-checkout (apps/web-checkout)
+
+$ ./pf module upsert --module-id infra --root-path infra --display-name "Infra"
+MODULE OK: infra (infra)
+
+$ ./pf status
+PowerFlow status: OK
+...
+NEXT (Codex): $pf-planner

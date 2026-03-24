@@ -1,0 +1,10 @@
+---
+pf_doc:
+  scope: module:<module_id>     # or root
+  sources:
+    - path: <path>
+      mode: file-sha           # file-sha | git-tree
+  freshness:
+    policy: strict             # strict | warn
+    stale_on_any_change: true
+---

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pf event payload envelope (for pf event append)",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "scope_type": {
+      "enum": [
+        "root",
+        "module"
+      ]
+    },
+    "scope_id": {
+      "type": "string"
+    },
+    "mission_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "slice_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worktree_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "actor": {
+      "enum": [
+        "user",
+        "assistant",
+        "pf"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    }
+  },
+  "required": [
+    "type",
+    "scope_type",
+    "scope_id",
+    "actor",
+    "summary",
+    "payload",
+    "artifact_ids"
+  ]
+}

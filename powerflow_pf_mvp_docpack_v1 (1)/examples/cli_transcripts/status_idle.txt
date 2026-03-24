@@ -1,0 +1,14 @@
+$ ./pf init
+PowerFlow init: OK
+Created: .pf/, .pf/state.db, .agents/skills/pf/, AGENTS.md
+NEXT: pf status
+
+$ ./pf status
+PowerFlow status: OK
+Init: yes
+Active mission: none
+Focus module: none
+Modules: 1 (root)
+
+NEXT (Codex): $pf-intake
+WHY: capture the next request and route it to modules
