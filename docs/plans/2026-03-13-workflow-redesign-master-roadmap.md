@@ -26,7 +26,7 @@ No stage may start without a packet, and no stage may finish without a report.
 
 Current active execution unit:
 
-- none
+- `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-packet.md`
 - latest completed packet: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-packet.md`
 - latest completed report: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-report.md`
 
@@ -60,7 +60,7 @@ Current active execution unit:
 - `Stage 0`: closed
 - `Stage 0.5`: closed
 - `Stage 1`: closed
-- `Stage 2`: in progress (`Stage 2A passed; next packet required`)
+- `Stage 2`: in progress (`Stage 2B packet ready`)
 - `Stage 3`: backlog
 - `Stage 4`: backlog
 - `Stage 5`: backlog
@@ -101,3 +101,4 @@ The detailed Stage 0 / Stage 0.5 artifacts were intentionally removed during the
 - Removed the test layer from the active redesign workspace; current verification is stage-gate and docs-consistency based, not test-driven.
 - Created `Stage 2 - Planning Studio` and packetized the first execution unit as `Stage 2A - Planning Posture And Artifact Contract`.
 - Completed `Stage 2A - Planning Posture And Artifact Contract` and recorded a mandatory stage report; Stage 2 remains open until the next packet is defined.
+- Created `Stage 2B - Coverage Sweep And Freeze Rules` as the next packetized execution unit for Stage 2.

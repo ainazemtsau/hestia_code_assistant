@@ -97,7 +97,9 @@ Stage 2 is done when:
 
 Stage 2 is in progress.
 
-There is no active execution packet at the moment.
+Active execution packet:
+
+- `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-packet.md`
 
 Latest completed execution unit:
 
@@ -112,4 +114,4 @@ Current Stage 2 execution chain:
 
 Next required action:
 
-- create the next Stage 2 packet for completeness sweep and freeze rules before continuing
+- execute `Stage 2B - Coverage Sweep And Freeze Rules` and stop at the end of that execution unit
