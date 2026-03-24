@@ -26,8 +26,8 @@ No stage may start without a packet, and no stage may finish without a report.
 
 Current active execution unit:
 
-- none
-- latest completed packet: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-packet.md`
+- `Stage 2A - Planning Posture And Artifact Contract`
+- packet: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-packet.md`
 - latest completed report: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-report.md`
 
 ## Stage Order
@@ -60,7 +60,7 @@ Current active execution unit:
 - `Stage 0`: closed
 - `Stage 0.5`: closed
 - `Stage 1`: closed
-- `Stage 2`: backlog (`next packet required`)
+- `Stage 2`: packet-ready (`Stage 2A - Planning Posture And Artifact Contract`)
 - `Stage 3`: backlog
 - `Stage 4`: backlog
 - `Stage 5`: backlog
@@ -99,3 +99,4 @@ The detailed Stage 0 / Stage 0.5 artifacts were intentionally removed during the
 - Created the next execution unit as `Stage 1B - Root / Module Program Boundaries`.
 - Completed `Stage 1B - Root / Module Program Boundaries`, populated `PROGRAM_MODEL.md`, and closed `Stage 1`.
 - Removed the test layer from the active redesign workspace; current verification is stage-gate and docs-consistency based, not test-driven.
+- Created `Stage 2 - Planning Studio` and packetized the first execution unit as `Stage 2A - Planning Posture And Artifact Contract`.

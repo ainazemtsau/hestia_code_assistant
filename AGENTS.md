@@ -10,8 +10,9 @@ It is not:
 Current source of truth:
 - Product contract: `docs/csk_vnext_final_spec_ru.md`
 - Execution roadmap: `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`
-- Latest completed stage: `docs/plans/2026-03-13-stage-1-entry-routing-root-module-program-model.md`
+- Current active stage: `docs/plans/2026-03-24-stage-2-planning-studio.md`
 - Autonomous execution protocol: `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
+- Current active stage packet: `docs/plans/2026-03-24-stage-2a-planning-posture-and-artifact-contract-packet.md`
 - Latest completed stage report: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-report.md`
 
 Canonical implementation surfaces in repo root:
