@@ -100,10 +100,10 @@ The first concrete execution packet is:
 
 - `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-packet.md`
 
-Current Stage 1 execution result:
+Current Stage 1 execution chain:
 
 - `Stage 1A - Root / Module UX Contract`: passed
 - report: `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-report.md`
-- next required action: create the next Stage 1 packet before continuing
+- next active packet: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-packet.md`
 
 Do not rebuild legacy `tools/csk`, `install`, or `.agents/skills` as a shortcut for Stage 1.

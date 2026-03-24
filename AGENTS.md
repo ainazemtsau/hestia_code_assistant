@@ -12,7 +12,7 @@ Current source of truth:
 - Execution roadmap: `docs/plans/2026-03-13-workflow-redesign-master-roadmap.md`
 - Current active stage: `docs/plans/2026-03-13-stage-1-entry-routing-root-module-program-model.md`
 - Autonomous execution protocol: `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
-- Current active stage packet: `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-packet.md`
+- Current active stage packet: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-packet.md`
 
 Canonical implementation surfaces in repo root:
 - `runtime/`
