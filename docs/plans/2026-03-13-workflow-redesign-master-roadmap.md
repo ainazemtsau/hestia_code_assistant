@@ -26,9 +26,9 @@ No stage may start without a packet, and no stage may finish without a report.
 
 Current active execution unit:
 
-- `Stage 1B - Root / Module Program Boundaries`
-- packet: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-packet.md`
-- previous report: `docs/plans/2026-03-24-stage-1a-root-module-ux-contract-report.md`
+- none
+- latest completed packet: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-packet.md`
+- latest completed report: `docs/plans/2026-03-24-stage-1b-root-module-program-boundaries-report.md`
 
 ## Stage Order
 
@@ -59,8 +59,8 @@ Current active execution unit:
 
 - `Stage 0`: closed
 - `Stage 0.5`: closed
-- `Stage 1`: packet-ready (`Stage 1B - Root / Module Program Boundaries`)
-- `Stage 2`: backlog
+- `Stage 1`: closed
+- `Stage 2`: backlog (`next packet required`)
 - `Stage 3`: backlog
 - `Stage 4`: backlog
 - `Stage 5`: backlog
@@ -97,4 +97,5 @@ The detailed Stage 0 / Stage 0.5 artifacts were intentionally removed during the
 - Added a docs-first autonomous execution framework: protocol, packet template, report template, and the first concrete packet for `Stage 1A - Root / Module UX Contract`.
 - Completed `Stage 1A - Root / Module UX Contract` and recorded a mandatory stage report; Stage 1 remains open until the next Stage 1 packet is defined.
 - Created the next execution unit as `Stage 1B - Root / Module Program Boundaries`.
+- Completed `Stage 1B - Root / Module Program Boundaries`, populated `PROGRAM_MODEL.md`, and closed `Stage 1`.
 - Removed the test layer from the active redesign workspace; current verification is stage-gate and docs-consistency based, not test-driven.

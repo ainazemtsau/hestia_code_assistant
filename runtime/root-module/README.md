@@ -1,3 +1,8 @@
 # Root / Module Program Model
 
-Stage 1 will define root-owned work, module-owned work, and next-command behavior here.
+Canonical documents in this subtree:
+
+- `PROGRAM_MODEL.md`
+- `NEXT_COMMAND_MODEL.md`
+
+These define root-owned work, module-owned work, coding boundaries, escalation rules, and dashboard-driven next-step behavior.
