@@ -15,3 +15,39 @@ Nothing here should depend on deleted legacy helpers.
 Canonical Stage 2 subtree:
 
 - `runtime/planning/`
+
+Canonical Stage 3 subtree:
+
+- `runtime/review/`
+
+Canonical Stage 4 subtree:
+
+- `runtime/execution/`
+
+Stage 4 canonical outputs:
+
+- `runtime/execution/EXECUTION_ENTRY.md`
+- `runtime/execution/SLICE_DISCIPLINE.md`
+- `runtime/execution/INCIDENT_RULES.md`
+- `runtime/execution/STATE_AND_EVIDENCE.md`
+
+Canonical Stage 5 subtree:
+
+- `runtime/ready/`
+
+Stage 5 canonical outputs so far:
+
+- `runtime/ready/READY_LEVELS.md`
+- `runtime/ready/LOCAL_REVIEW.md`
+- `runtime/ready/PARENT_INTEGRATION.md`
+- `runtime/ready/FINAL_REVIEW_AND_REPORTING.md`
+
+Canonical Stage 6 subtree:
+
+- `runtime/retro/`
+
+Stage 6 canonical outputs so far:
+
+- `runtime/retro/LEAF_RETRO.md`
+- `runtime/retro/PROMOTION_TARGETS.md`
+- `runtime/retro/ROOT_RETRO_AND_CAPABILITY_SUGGESTIONS.md`

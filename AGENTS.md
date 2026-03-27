@@ -13,7 +13,7 @@ Current source of truth:
 - Current active stage: `none`
 - Current active stage packet: `none`
 - Autonomous execution protocol: `docs/plans/AUTONOMOUS_EXECUTION_PROTOCOL.md`
-- Latest completed stage report: `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-report.md`
+- Latest completed stage report: `docs/plans/2026-03-24-stage-9c-final-manifestization-and-stage-closure-report.md`
 
 Canonical implementation surfaces in repo root:
 - `runtime/`

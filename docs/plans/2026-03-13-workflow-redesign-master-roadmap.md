@@ -27,8 +27,8 @@ No stage may start without a packet, and no stage may finish without a report.
 Current active execution unit:
 
 - none
-- latest completed packet: `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-packet.md`
-- latest completed report: `docs/plans/2026-03-24-stage-2b-coverage-sweep-and-freeze-rules-report.md`
+- latest completed packet: `docs/plans/2026-03-24-stage-9c-final-manifestization-and-stage-closure-packet.md`
+- latest completed report: `docs/plans/2026-03-24-stage-9c-final-manifestization-and-stage-closure-report.md`
 
 ## Stage Order
 
@@ -61,13 +61,13 @@ Current active execution unit:
 - `Stage 0.5`: closed
 - `Stage 1`: closed
 - `Stage 2`: closed
-- `Stage 3`: backlog (`next packet required`)
-- `Stage 4`: backlog
-- `Stage 5`: backlog
-- `Stage 6`: backlog
-- `Stage 7`: backlog
-- `Stage 8`: backlog
-- `Stage 9`: backlog
+- `Stage 3`: closed
+- `Stage 4`: closed
+- `Stage 5`: closed
+- `Stage 6`: closed
+- `Stage 7`: closed
+- `Stage 8`: closed
+- `Stage 9`: closed
 
 ## Historical Baseline
 
@@ -103,3 +103,37 @@ The detailed Stage 0 / Stage 0.5 artifacts were intentionally removed during the
 - Completed `Stage 2A - Planning Posture And Artifact Contract` and recorded a mandatory stage report; Stage 2 remains open until the next packet is defined.
 - Created `Stage 2B - Coverage Sweep And Freeze Rules` as the next packetized execution unit for Stage 2.
 - Completed `Stage 2B - Coverage Sweep And Freeze Rules`, added the canonical completeness sweep and freeze docs, and closed `Stage 2`.
+- Created `Stage 3 - Hard Plan Review` and packetized the first execution unit as `Stage 3A - Critic Gate Contract And Verdict Model`.
+- Completed `Stage 3A - Critic Gate Contract And Verdict Model` and recorded a mandatory stage report; Stage 3 remains open until the next packet is defined.
+- Created `Stage 3B - Critic Checklist And State Transitions` as the next packetized execution unit for Stage 3.
+- Completed `Stage 3B - Critic Checklist And State Transitions`, added the canonical critic checklist and state-transition docs, and closed `Stage 3`.
+- Created `Stage 4 - Autonomous Execution Model` and packetized the first execution unit as `Stage 4A - Execution Entry And Slice Discipline`.
+- Completed `Stage 4A - Execution Entry And Slice Discipline` and recorded a mandatory stage report; Stage 4 remains open until the next packet is defined.
+- Created `Stage 4B - Incident Rules And State/Evidence Semantics` as the next packetized execution unit for Stage 4.
+- Completed `Stage 4B - Incident Rules And State/Evidence Semantics`, fixed the canonical incident and state/evidence execution rules, and closed `Stage 4`.
+- Created `Stage 5 - Final Review, READY, Reporting` and packetized the first execution unit as `Stage 5A - Local Review And Ready-Local`.
+- Completed `Stage 5A - Local Review And Ready-Local`, fixed the canonical local review and `ready-local` contract, and left `Stage 5` open until the next packet is defined.
+- Created `Stage 5B - Parent Integration And Ready-Parent` as the next packetized execution unit for `Stage 5`.
+- Completed `Stage 5B - Parent Integration And Ready-Parent`, fixed the canonical parent integration and `ready-parent` contract, and left `Stage 5` open until the next packet is defined.
+- Created `Stage 5C - Final Review, Ready-Final, And Reporting` as the next packetized execution unit for `Stage 5`.
+- Completed `Stage 5C - Final Review, Ready-Final, And Reporting`, fixed the canonical root-level final review and reporting contract, and closed `Stage 5`.
+- Created `Stage 6 - Retro, Learning, Capability Suggestions` and packetized the first execution unit as `Stage 6A - Leaf Retro And Promotion Targets`.
+- Completed `Stage 6A - Leaf Retro And Promotion Targets`, fixed the canonical leaf retro and promotion-target model, and left `Stage 6` open until the next packet is defined.
+- Created `Stage 6B - Root Retro Summary And Capability Suggestions` as the next packetized execution unit for `Stage 6`.
+- Completed `Stage 6B - Root Retro Summary And Capability Suggestions`, fixed the canonical root retro summary and capability-suggestion boundary, and closed `Stage 6`.
+- Created `Stage 7 - Client-Facing Installed Package` and packetized the first execution unit as `Stage 7A - Package Shape And Ownership Boundaries`.
+- Completed `Stage 7A - Package Shape And Ownership Boundaries`, fixed the canonical package shape and ownership boundary, and left `Stage 7` open until the next packet is defined.
+- Created `Stage 7B - Bootstrap And Runtime Surfaces` as the next packetized execution unit for `Stage 7`.
+- Completed `Stage 7B - Bootstrap And Runtime Surfaces`, fixed the canonical client bootstrap and generated runtime-surface boundary, and left `Stage 7` open until the next packet is defined.
+- Created `Stage 7C - Init, Adopt, And Runtime-Sync Package Semantics` as the next packetized execution unit for `Stage 7`.
+- Completed `Stage 7C - Init, Adopt, And Runtime-Sync Package Semantics`, fixed the canonical install/init/adopt/runtime-sync package contract, and closed `Stage 7`.
+- Created `Stage 8 - Install / Update Delivery Layer` and packetized the first execution unit as `Stage 8A - Delivery Boundaries And Manifest Contract`.
+- Completed `Stage 8A - Delivery Boundaries And Manifest Contract`, fixed the canonical thin-delivery boundary and ownership-aware manifest contract, and left `Stage 8` open until the next packet is defined.
+- Created `Stage 8B - Apply Rules And Runtime-Handoff Timing` as the next packetized execution unit for `Stage 8`.
+- Completed `Stage 8B - Apply Rules And Runtime-Handoff Timing`, fixed the canonical install/update action matrix and delivery-side runtime handoff timing, and closed `Stage 8`.
+- Created `Stage 9 - Compatibility, Cleanup, Cutover` and packetized the first execution unit as `Stage 9A - Compatibility Surfaces And Cutover Map`.
+- Completed `Stage 9A - Compatibility Surfaces And Cutover Map`, fixed the canonical compatibility policy and class-based cutover map, and left `Stage 9` open until the next packet is defined.
+- Created `Stage 9B - Cleanup And Migration Rules` as the next packetized execution unit for `Stage 9`.
+- Completed `Stage 9B - Cleanup And Migration Rules`, fixed the canonical cleanup policy and contributor migration rules, and left `Stage 9` open until the next packet is defined.
+- Created `Stage 9C - Final Manifestization And Stage Closure` as the next packetized execution unit for `Stage 9`.
+- Completed `Stage 9C - Final Manifestization And Stage Closure`, fixed the minimum future manifest model and closure criteria, and closed `Stage 9`.

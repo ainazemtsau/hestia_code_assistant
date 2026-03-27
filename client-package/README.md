@@ -1,8 +1,15 @@
 # Canonical Client Package
 
-This subtree will hold the installable CSK client package after runtime design is stable.
+Canonical documents in this subtree:
 
-Stage ownership:
-- `Stage 7`
+- `PACKAGE_LAYOUT.md`
+- `OWNERSHIP_BOUNDARIES.md`
+- `BOOTSTRAP_AND_RUNTIME_SURFACES.md`
+- `INIT_ADOPT_AND_RUNTIME_SYNC.md`
 
-It should not be populated before runtime behavior is defined.
+These documents define:
+
+- the Stage 7A installed package shape for a client repository
+- the Stage 7A ownership boundary between managed base, project overlay, task state, and generated runtime
+- the Stage 7B bootstrap and generated runtime-surface layer for Codex inside the client package
+- the Stage 7C package semantics for install result, init/adopt result, and runtime sync
